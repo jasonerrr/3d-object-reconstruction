@@ -1,0 +1,176 @@
+../co3d-main/dataset/plant/247_26441_50907/images
+a small tree in a pot
+../co3d-main/dataset/plant/374_42005_84358/images
+a plant on a table
+../co3d-main/dataset/plant/461_65179_127609/images
+a plant in a pot
+../co3d-main/dataset/broccoli/501_71955_139909/images
+a piece of broccole on a table
+../co3d-main/dataset/broccoli/372_41112_81867/images
+a broccolo broccolo broccolo broccolo broccolo
+../co3d-main/dataset/broccoli/412_56288_108844/images
+a plate with a piece of broccole on it
+../co3d-main/dataset/bottle/618_100690_201667/images
+a bottle of water on a table
+../co3d-main/dataset/teddybear/598_91820_182418/images
+a stuffed animal sitting on a table
+../co3d-main/dataset/teddybear/187_20215_38541/images
+a teddy bear wearing a sweater
+../co3d-main/dataset/teddybear/34_1479_4753/images
+a teddy bear sitting on a table
+../co3d-main/dataset/motorcycle/613_98146_195503/images
+a black and gold motorcycle
+../co3d-main/dataset/toytrain/399_51323_100753/images
+a toy car on the floor
+../co3d-main/dataset/toytrain/240_25394_51994/images
+a toy train on a wooden table
+../co3d-main/dataset/toytrain/579_85857_169792/images
+a toy car on the floor
+../co3d-main/dataset/hydrant/411_56064_108483/images
+a yellow fire hydra
+../co3d-main/dataset/hydrant/167_18184_34441/images
+a yellow fire hydra on a sidewalk
+../co3d-main/dataset/hydrant/605_94563_187702/images
+a red fire hydra on the side of the road
+../co3d-main/dataset/ball/375_42693_85518/images
+a baseball
+../co3d-main/dataset/ball/123_14363_28981/images
+a soccer ball on a table
+../co3d-main/dataset/ball/457_64526_127116/images
+a basketball on a table
+../co3d-main/dataset/toyplane/581_86168_170640/images
+a bird on a quilt
+../co3d-main/dataset/hairdryer/589_88527_177219/images
+a flashlight on a table
+../co3d-main/dataset/laptop/610_96608_193597/images
+a laptop on a kitchen counter
+../co3d-main/dataset/bicycle/463_65614_128477/images
+a red motorcycle parked in a parking lot
+../co3d-main/dataset/cup/575_84340_166477/images
+a cup on a table
+../co3d-main/dataset/backpack/537_78249_152122/images
+a blue bag on the floor
+../co3d-main/dataset/banana/610_96665_193716/images
+a banana on a book
+../co3d-main/dataset/remote/581_86213_170733/images
+a child playing with a remote control device
+../co3d-main/dataset/remote/195_20989_41543/images
+a purple xbox controller
+../co3d-main/dataset/remote/350_36761_68623/images
+a controller on a table
+../co3d-main/dataset/umbrella/586_87527_173920/images
+a black umbrella on the ground
+../co3d-main/dataset/toaster/372_41229_82130/images
+a toaster on a table
+../co3d-main/dataset/toaster/581_86572_172117/images
+a toy car on the floor
+../co3d-main/dataset/toaster/416_57389_110765/images
+a toaster on a table
+../co3d-main/dataset/couch/617_99945_199053/images
+a living room with grey carpet
+../co3d-main/dataset/mouse/377_43416_86289/images
+a mouse on top of a wooden box
+../co3d-main/dataset/mouse/107_12753_23606/images
+a mouse on a table
+../co3d-main/dataset/mouse/475_67311_132096/images
+a computer mouse on a tiled floor
+../co3d-main/dataset/wineglass/589_88409_176220/images
+a wine glass on a table
+../co3d-main/dataset/book/247_26469_51778/images
+a book on a wooden table
+../co3d-main/dataset/book/119_13962_28926/images
+a book on a table
+../co3d-main/dataset/book/455_64124_126393/images
+a book on a wooden table
+../co3d-main/dataset/orange/592_89298_179294/images
+an orange on a table
+../co3d-main/dataset/orange/385_45386_90752/images
+a lemon in a bowl of water
+../co3d-main/dataset/orange/374_42196_84367/images
+an orange on a table
+../co3d-main/dataset/baseballglove/601_92967_186813/images
+a baseball glove on the floor
+../co3d-main/dataset/chair/555_79602_154353/images
+a chair that is on the floor
+../co3d-main/dataset/cellphone/480_68482_132956/images
+a phone on a table
+../co3d-main/dataset/hotdog/592_89300_179377/images
+a hot dog on a table
+../co3d-main/dataset/vase/380_44863_89631/images
+a glass of water on the floor
+../co3d-main/dataset/vase/374_41862_83720/images
+a basket on a table
+../co3d-main/dataset/vase/501_72100_140329/images
+a bottle on the ground
+../co3d-main/dataset/suitcase/410_55734_107452/images
+a suitcase on the ground
+../co3d-main/dataset/suitcase/495_71129_138259/images
+a black briefcase on the floor
+../co3d-main/dataset/suitcase/50_2928_8645/images
+a toy car on the floor
+../co3d-main/dataset/toytruck/190_20494_39385/images
+a toy truck on a couch
+../co3d-main/dataset/toytruck/346_36113_66551/images
+a toy truck in the dirt
+../co3d-main/dataset/toytruck/575_84788_167772/images
+a toy car on a table
+../co3d-main/dataset/carrot/529_76596_147878/images
+a carrot on a table
+../co3d-main/dataset/keyboard/612_97831_196894/images
+a keyboard on a table
+../co3d-main/dataset/bench/415_57112_110099/images
+a bench in the grass
+../co3d-main/dataset/bench/415_57121_110109/images
+a bench on a sidewalk
+../co3d-main/dataset/bench/602_93392_185234/images
+a bench in a park
+../co3d-main/dataset/apple/189_20393_38136/images
+an apple on a table
+../co3d-main/dataset/apple/110_13051_23361/images
+an apple on a table
+../co3d-main/dataset/apple/540_79043_153212/images
+an apple on a table
+../co3d-main/dataset/handbag/404_53769_104901/images
+a bag on the floor
+../co3d-main/dataset/car/621_101777_202473/images
+the rear end of a blue car
+../co3d-main/dataset/frisbee/534_77341_149540/images
+a hockey puck on a table
+../co3d-main/dataset/baseballbat/569_82570_162821/images
+a yellow pipe laying on the floor
+../co3d-main/dataset/cake/374_42274_84517/images
+a piece of cake on a plate
+../co3d-main/dataset/cake/472_66839_131490/images
+a cake in a pan
+../co3d-main/dataset/cake/403_53094_103680/images
+a potato
+../co3d-main/dataset/toybus/592_89246_179000/images
+a toy car on the floor
+../co3d-main/dataset/pizza/586_87341_172687/images
+a pizza sitting on a table
+../co3d-main/dataset/skateboard/366_39266_76077/images
+a skate that is on the floor
+../co3d-main/dataset/skateboard/555_79675_154706/images
+a skate on a carpet
+../co3d-main/dataset/skateboard/245_26182_52130/images
+a skateboard on a tree stump
+../co3d-main/dataset/toilet/602_93503_186945/images
+a bathroom with a toilet
+../co3d-main/dataset/kite/589_88580_177417/images
+a car in the water
+../co3d-main/dataset/bowl/602_93517_186985/images
+a plate on a table
+../co3d-main/dataset/bowl/70_5792_13401/images
+a glass in a sink
+../co3d-main/dataset/bowl/69_5465_12831/images
+a table with a bowl on it
+../co3d-main/dataset/donut/403_52964_103416/images
+a piece of fruit on a table
+../co3d-main/dataset/donut/492_70706_137521/images
+a dough on a plate
+../co3d-main/dataset/donut/391_47032_93657/images
+a chocolate cake on a table
+../co3d-main/dataset/parkingmeter/519_74514_144903/images
+a parking meter
+../co3d-main/dataset/sandwich/432_61184_119599/images
+a sandwich on a table
