@@ -114,11 +114,14 @@ class MyDataset(Dataset):
             img1=self.cropWithMask(img1,mask1,512)
             img2=self.cropWithMask(img2,mask2,512)
         '''
-        img1=self.image_transform(img1)
-        img2=self.image_transform(img2)
+        img1,mask1=self.image_transform(img1)
+        img2,mask2=self.image_transform(img2)
         relative=self.relative_pose(pose1[0].numpy(),pose1[1].numpy(),pose2[0].numpy(),pose2[1].numpy())
         relative=torch.tensor(relative)
-        return img1,pose1,img2,pose2,relative
+        mask1=torch.tensor(mask1)
+        mask2=torch.tensor(mask2)
+
+        return img1,mask1,pose1,img2,mask2,pose2,relative
     def __len__(self):
         return len(self.files)
     def cropWithMask(self,img,mask,resolution):
@@ -143,6 +146,7 @@ class MyDataset(Dataset):
         #crop=torchvision.transforms.Resize(crop,(resolution,resolution))
         crop=torchvision.transforms.functional.resize(crop, [resolution,resolution], interpolation=2)
         return crop
+    #add zero to make the img to square and resize, also return mask
     def image_transform(self,img):
         C, H, W = img.shape
         pad_1 = int(abs(H - W) // 2)  # 一侧填充长度
@@ -150,11 +154,19 @@ class MyDataset(Dataset):
         img = img.unsqueeze(0)  # 加轴
         if H > W:
             img = nn.ZeroPad2d((pad_1, pad_2, 0, 0))(img)  # 左右填充，填充值是0
+            x1=(pad_1*self.resolution)//H
+            y1=0
+            x2=self.resolution-((pad_2*self.resolution)//H)
+            y2=self.resolution
         elif H < W:
             img = nn.ZeroPad2d((0, 0, pad_1, pad_2))(img)  # 上下填充，填充值是0
+            x1=0
+            y1=(pad_1*self.resolution)//W
+            x2=self.resolution
+            y2=self.resolution-((pad_2*self.resolution)//W)
         img = img.squeeze(0)
         img=torchvision.transforms.functional.resize(img, [self.resolution,self.resolution], interpolation=2)
-        return img
+        return img,[x1,y1,x2,y2]
 
     #save the text of each sequence in text.txt using blip
     def save_text(self,path):
@@ -198,12 +210,14 @@ class MyDataset(Dataset):
     
 train_data=MyDataset("../co3d-main/dataset",512)
 train_loader=DataLoader(train_data,batch_size=1,shuffle=False)
-for img1,pose1,img2,pose2,relative in train_loader:
+for img1,mask1,pose1,img2,mask2,pose2,relative in train_loader:
     print(img1.shape)
-    print(img1)
+    print(mask1)
+    #print(img1)
     print(pose1)
     print(img2.shape)
-    print(img2)
+    print(mask2)
+    #print(img2)
     print(pose2)
     print(relative)
     print(relative.shape)
