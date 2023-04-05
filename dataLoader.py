@@ -3,19 +3,22 @@ from torchvision.io import read_image
 import torchvision
 import random
 import torch
+import torch.nn as nn
 import gzip
 import matplotlib.pyplot as plt
 import os
 import demjson
 import numpy as np
 import math
+#import cv2
+import sys
 #print(sys.path)
 from blip.demo import blip_run
 #from models.blip import blip_decoder
 class MyDataset(Dataset):
-    def __init__(self,path,crop,resolution):
+    def __init__(self,path,resolution):
         self.path=path
-        self.crop=crop
+        #self.crop=crop
         self.resolution=resolution
         #get_data=GetDataset(path=self.path)
         #self.data=get_data.getImageCamera()
@@ -57,8 +60,8 @@ class MyDataset(Dataset):
                     if(frame["meta"]["frame_type"][-6:]!="unseen"):
                         img_path=self.path+"/"+frame["image"]["path"]
                         self.files.append(img_path)
-                        if(self.crop):
-                            self.img_mask[img_path]=self.path+'/'+frame["mask"]["path"]
+                        #if(self.crop):
+                            #self.img_mask[img_path]=self.path+'/'+frame["mask"]["path"]
                         folder=os.path.dirname(img_path)
                         self.dir_file[folder].append(img_path)
                         R=torch.Tensor(frame["viewpoint"]["R"])
@@ -66,7 +69,7 @@ class MyDataset(Dataset):
                         T=torch.Tensor(frame["viewpoint"]["T"])
                         #print(T.shape)
                         self.file_pose[img_path]=[R,T]
-        print(self.dirs)
+        #print(self.dirs)
         #add text to each sequence
         if(os.path.exists("text.txt")==False):
             self.save_text("text.txt")
@@ -98,6 +101,7 @@ class MyDataset(Dataset):
         img2_path=random.choice(self.dir_file[folder])
         img2=read_image(img2_path)
         pose2=self.file_pose[img2_path]
+        '''
         if(self.crop):
             mask1_path=self.img_mask[img1_path]
             mask1=read_image(mask1_path)
@@ -109,6 +113,9 @@ class MyDataset(Dataset):
             #img2=self.cropWithMask(img2,mask2,self.resolution)
             img1=self.cropWithMask(img1,mask1,512)
             img2=self.cropWithMask(img2,mask2,512)
+        '''
+        img1=self.image_transform(img1)
+        img2=self.image_transform(img2)
         relative=self.relative_pose(pose1[0].numpy(),pose1[1].numpy(),pose2[0].numpy(),pose2[1].numpy())
         relative=torch.tensor(relative)
         return img1,pose1,img2,pose2,relative
@@ -136,6 +143,19 @@ class MyDataset(Dataset):
         #crop=torchvision.transforms.Resize(crop,(resolution,resolution))
         crop=torchvision.transforms.functional.resize(crop, [resolution,resolution], interpolation=2)
         return crop
+    def image_transform(self,img):
+        C, H, W = img.shape
+        pad_1 = int(abs(H - W) // 2)  # 一侧填充长度
+        pad_2 = int(abs(H - W) - pad_1)  # 另一侧填充长度
+        img = img.unsqueeze(0)  # 加轴
+        if H > W:
+            img = nn.ZeroPad2d((pad_1, pad_2, 0, 0))(img)  # 左右填充，填充值是0
+        elif H < W:
+            img = nn.ZeroPad2d((0, 0, pad_1, pad_2))(img)  # 上下填充，填充值是0
+        img = img.squeeze(0)
+        img=torchvision.transforms.functional.resize(img, [self.resolution,self.resolution], interpolation=2)
+        return img
+
     #save the text of each sequence in text.txt using blip
     def save_text(self,path):
         file=open(path,'w')
@@ -176,15 +196,20 @@ class MyDataset(Dataset):
         phi=math.atan(y/x)
         return r,theta,phi
     
-train_data=MyDataset("../co3d-main/dataset",True,512)
+train_data=MyDataset("../co3d-main/dataset",512)
 train_loader=DataLoader(train_data,batch_size=1,shuffle=False)
 for img1,pose1,img2,pose2,relative in train_loader:
     print(img1.shape)
+    print(img1)
     print(pose1)
     print(img2.shape)
+    print(img2)
     print(pose2)
     print(relative)
     print(relative.shape)
+    torchvision.utils.save_image(img1/255.0,"./1.png")
+    torchvision.utils.save_image(img2/255.0,"./2.png")
+    sys.exit(0)
 #print(train_data[0])
 #print(train_data[0][0])
 #plt.imshow(train_data[0][0].permute(1,2,0))
