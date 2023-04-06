@@ -30,6 +30,7 @@ class MyDataset(Dataset):
         #key:img_path
         #value:camera pose
         self.img_camera={}
+        self.random_images=[]
         if(self.split=="train"):
             g=os.listdir(self.path)
             for dir in g:
@@ -73,12 +74,22 @@ class MyDataset(Dataset):
 
 
     def __getitem__(self,index):
-        sequence_index=index//12
-        img_pair=random.sample(self.sequence_imgs[self.sequence[sequence_index]][0],2)
-        img1=read_image(img_pair[0])
-        img2=read_image(img_pair[1])
-        pose1=self.img_camera[img_pair[0]]
-        pose2=self.img_camera[img_pair[1]]
+        sequence_index=index//self.pairs
+        pair_id=index%self.pairs
+        if(pair_id==0):
+            self.random_images=random.sample(self.sequence_imgs[self.sequence[sequence_index]][0],2*self.pairs)
+
+
+        #img_pair=random.sample(self.sequence_imgs[self.sequence[sequence_index]][0],2)
+        #print(img_pair)
+        img1_path=self.random_images[2*pair_id]
+        img2_path=self.random_images[2*pair_id+1]
+        print(img1_path)
+        print(img2_path)
+        img1=read_image(img1_path)
+        img2=read_image(img2_path)
+        pose1=self.img_camera[img1_path]
+        pose2=self.img_camera[img2_path]
         text=self.sequence_imgs[self.sequence[sequence_index]][1]
         img1,mask1=self.image_transform(img1)
         img2,mask2=self.image_transform(img2)
@@ -94,17 +105,17 @@ class MyDataset(Dataset):
     #add zero to make the img to square and resize, also return mask
     def image_transform(self,img):
         C, H, W = img.shape
-        pad_1 = int(abs(H - W) // 2)  # 一侧填充长度
-        pad_2 = int(abs(H - W) - pad_1)  # 另一侧填充长度
-        img = img.unsqueeze(0)  # 加轴
+        pad_1 = int(abs(H - W) // 2)  # length to add zero on one side
+        pad_2 = int(abs(H - W) - pad_1)  # length to add zero on the other side
+        img = img.unsqueeze(0)  # add axis
         if H > W:
-            img = nn.ZeroPad2d((pad_1, pad_2, 0, 0))(img)  # 左右填充，填充值是0
+            img = nn.ZeroPad2d((pad_1, pad_2, 0, 0))(img)  #add zero to left and right
             x1=(pad_1*self.resolution)//H
             y1=0
             x2=self.resolution-((pad_2*self.resolution)//H)
             y2=self.resolution
-        elif H < W:
-            img = nn.ZeroPad2d((0, 0, pad_1, pad_2))(img)  # 上下填充，填充值是0
+        else:
+            img = nn.ZeroPad2d((0, 0, pad_1, pad_2))(img)  #add zero to up and down
             x1=0
             y1=(pad_1*self.resolution)//W
             x2=self.resolution
@@ -169,7 +180,7 @@ for img1,mask1,img2,mask2,relative,text in train_loader:
     torchvision.utils.save_image(img1/255.0,"./1.png")
     torchvision.utils.save_image(img2/255.0,"./2.png")
     print(text)
-    sys.exit(0)
+    #sys.exit(0)
 #print(train_data[0])
 #print(train_data[0][0])
 #plt.imshow(train_data[0][0].permute(1,2,0))
