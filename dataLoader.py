@@ -67,6 +67,7 @@ class MyDataset(Dataset):
                 text=f.readline()
                 if(len(dir)==0):
                     break
+                dir=self.path+'/'+dir
                 self.sequence_imgs[dir.replace('\n','')].append(text.replace('\n',''))
             f.close()
 
@@ -95,9 +96,18 @@ class MyDataset(Dataset):
         img2,mask2=self.image_transform(img2)
         relative=self.relative_pose(pose1[0].numpy(),pose1[1].numpy(),pose2[0].numpy(),pose2[1].numpy())
         relative=torch.tensor(relative)
+        relative = relative.view(-1)
         mask1=torch.tensor(mask1)
         mask2=torch.tensor(mask2)
-        return img1,mask1,img2,mask2,relative,text
+        #print(text)
+        #print(type(text))
+        #return img1,mask1,img2,mask2,relative,text
+        return dict(
+            jpg=img1.permute(1,2,0),
+            txt=text,
+            hint=img2.permute(1,2,0),
+            view_linear=relative
+        )
 
     def __len__(self):
         return self.pairs*len(self.sequence)
@@ -130,6 +140,7 @@ class MyDataset(Dataset):
         for seq in self.sequence:
             img_path=random.choice(self.sequence_imgs[seq][0])
             text=blip_run(img_path)
+            seq.replace(self.path+'/','')
             file.write(seq)
             file.write('\n')
             file.write(text)
@@ -166,20 +177,12 @@ class MyDataset(Dataset):
     
 train_data=MyDataset("../co3d-main/dataset","train",512,12)
 train_loader=DataLoader(train_data,batch_size=1,shuffle=False)
-for img1,mask1,img2,mask2,relative,text in train_loader:
-    print(img1.shape)
-    print(mask1)
-    #print(img1)
-    #print(pose1)
-    print(img2.shape)
-    print(mask2)
-    #print(img2)
-    #print(pose2)
-    print(relative)
-    print(relative.shape)
-    torchvision.utils.save_image(img1/255.0,"./1.png")
-    torchvision.utils.save_image(img2/255.0,"./2.png")
-    print(text)
+for result in train_loader:
+    #print(result)
+    print(result["jpg"].shape)
+    print(result["txt"])
+    print(result["hint"].shape)
+    print(result["view_linear"])
     #sys.exit(0)
 #print(train_data[0])
 #print(train_data[0][0])
