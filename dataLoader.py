@@ -38,6 +38,7 @@ class MyDataset(Dataset):
         #value : camera pose in the form of [R,T] of the image
         self.file_pose={}
         self.img_mask={}
+        self.dir_text={}
         g=os.listdir(path)
         for dir in g:
             if(dir[0]!='_' and '.' not in dir):
@@ -73,6 +74,15 @@ class MyDataset(Dataset):
         #add text to each sequence
         if(os.path.exists("text.txt")==False):
             self.save_text("text.txt")
+        f=open("text.txt")
+        while(1):
+            dir=f.readline()
+            text=f.readline()
+            if(len(dir)==0):
+                break
+            self.dir_text[dir.replace('\n','')]=text.replace('\n','')
+        f.close()
+        print(self.dir_text)
         #print(self.path)
         #print(self.paths[0])
         #print(self.dirs[0])
@@ -101,6 +111,7 @@ class MyDataset(Dataset):
         img2_path=random.choice(self.dir_file[folder])
         img2=read_image(img2_path)
         pose2=self.file_pose[img2_path]
+        text=self.dir_text[folder]
         '''
         if(self.crop):
             mask1_path=self.img_mask[img1_path]
@@ -121,7 +132,7 @@ class MyDataset(Dataset):
         mask1=torch.tensor(mask1)
         mask2=torch.tensor(mask2)
 
-        return img1,mask1,pose1,img2,mask2,pose2,relative
+        return img1,mask1,pose1,img2,mask2,pose2,relative,text
     def __len__(self):
         return len(self.files)
     def cropWithMask(self,img,mask,resolution):
@@ -210,7 +221,7 @@ class MyDataset(Dataset):
     
 train_data=MyDataset("../co3d-main/dataset",512)
 train_loader=DataLoader(train_data,batch_size=1,shuffle=False)
-for img1,mask1,pose1,img2,mask2,pose2,relative in train_loader:
+for img1,mask1,pose1,img2,mask2,pose2,relative,text in train_loader:
     print(img1.shape)
     print(mask1)
     #print(img1)
@@ -223,6 +234,7 @@ for img1,mask1,pose1,img2,mask2,pose2,relative in train_loader:
     print(relative.shape)
     torchvision.utils.save_image(img1/255.0,"./1.png")
     torchvision.utils.save_image(img2/255.0,"./2.png")
+    print(text)
     sys.exit(0)
 #print(train_data[0])
 #print(train_data[0][0])
