@@ -7,6 +7,7 @@ import torch.nn as nn
 import gzip
 import matplotlib.pyplot as plt
 import os
+import json
 import demjson
 import numpy as np
 import math
@@ -16,147 +17,80 @@ import sys
 from blip.demo import blip_run
 #from models.blip import blip_decoder
 class MyDataset(Dataset):
-    def __init__(self,path,resolution):
+    def __init__(self,path,split,resolution,pairs):
         self.path=path
-        #self.crop=crop
         self.resolution=resolution
-        #get_data=GetDataset(path=self.path)
-        #self.data=get_data.getImageCamera()
-        #paths of all object
-        #e.g. ../co3d-main/dataset/plant
-        self.paths=[]
-        #paths of all folders that contain training images
-        #e.g. ../co3d-main/dataset/plant/247_26441_50907/images
-        self.dirs=[]
-        #paths of all images
-        #e.g. ../co3d-main/dataset/plant/461_65179_127609/images/frame000001.jpg
-        self.files=[]
-        #key : father folder of images
-        #value : list of paths of images
-        self.dir_file={}
-        #key : path of images
-        #value : camera pose in the form of [R,T] of the image
-        self.file_pose={}
-        self.img_mask={}
-        self.dir_text={}
-        g=os.listdir(path)
-        for dir in g:
-            if(dir[0]!='_' and '.' not in dir):
-                #print(dir)
-                #self.objects.append(dir)
-                obj_path=path+'/'+dir
-                self.paths.append(obj_path)
-                folders=os.listdir(obj_path)
-                for folder in folders:
-                    if(folder[0].isdigit()):
-                        self.dirs.append(obj_path+'/'+folder+"/images")
-                        self.dir_file[obj_path+'/'+folder+"/images"]=[]
-                name=obj_path+"/frame_annotations.jgz"
-                g_file=gzip.GzipFile(name)
-                content=g_file.read()
-                text=demjson.decode(content)
-                
-
-                for frame in text:
-                    if(frame["meta"]["frame_type"][-6:]!="unseen"):
-                        img_path=self.path+"/"+frame["image"]["path"]
-                        self.files.append(img_path)
-                        #if(self.crop):
-                            #self.img_mask[img_path]=self.path+'/'+frame["mask"]["path"]
-                        folder=os.path.dirname(img_path)
-                        self.dir_file[folder].append(img_path)
+        self.sequence=[]
+        #split in ["train","valid","test"]
+        self.split=split
+        self.pairs=pairs
+        #key:sequence_path
+        #value:[[img1_path,img2_path,...],text]
+        self.sequence_imgs={}
+        #key:img_path
+        #value:camera pose
+        self.img_camera={}
+        if(self.split=="train"):
+            g=os.listdir(self.path)
+            for dir in g:
+                if(dir[0]!='_' and '.' not in dir):
+                    #self.sequence.append(self.path+'/'+dir)
+                    seq_path=self.path+'/'+dir+'/'+"set_lists"
+                    seqs=os.listdir(seq_path)
+                    for seq in seqs:
+                        with open(seq_path+'/'+seq,'r') as file:
+                            seq_info=json.load(file)
+                            train_data=seq_info["train"]
+                            sequence_path=self.path+'/'+dir+'/'+train_data[0][0]+'/images'
+                            self.sequence.append(sequence_path)
+                            #self.sequence_imgs[sequence_path]=[[]]
+                            imgs=[]
+                            for data in train_data:
+                                imgs.append(self.path+'/'+data[2])
+                            self.sequence_imgs[sequence_path]=[imgs]
+                    anno_path=self.path+'/'+dir+"/frame_annotations.jgz"
+                    g_file=gzip.GzipFile(anno_path)
+                    content=g_file.read()
+                    text=demjson.decode(content)
+                    for frame in text:
+                        img_path=self.path+'/'+frame["image"]["path"]
                         R=torch.Tensor(frame["viewpoint"]["R"])
-                        #print(R.shape)
                         T=torch.Tensor(frame["viewpoint"]["T"])
-                        #print(T.shape)
-                        self.file_pose[img_path]=[R,T]
-        #print(self.dirs)
-        #add text to each sequence
-        if(os.path.exists("text.txt")==False):
-            self.save_text("text.txt")
-        f=open("text.txt")
-        while(1):
-            dir=f.readline()
-            text=f.readline()
-            if(len(dir)==0):
-                break
-            self.dir_text[dir.replace('\n','')]=text.replace('\n','')
-        f.close()
-        print(self.dir_text)
-        #print(self.path)
-        #print(self.paths[0])
-        #print(self.dirs[0])
-        #print(self.files[0])
-        #print(self.dir_file[self.dirs[0]])
-        #print(self.file_pose[self.files[0]])
+                        self.img_camera[img_path]=[R,T]
+            if(os.path.exists("text.txt")==False):
+                self.save_text("text.txt")
+            #print(self.sequence)
+            f=open("text.txt")
+            while(1):
+                dir=f.readline()
+                text=f.readline()
+                if(len(dir)==0):
+                    break
+                self.sequence_imgs[dir.replace('\n','')].append(text.replace('\n',''))
+            f.close()
+
+
+
+
     def __getitem__(self,index):
-        '''
-        img1_path,pose=self.data[index]
-        folder=os.path.dirname(img1_path)
-        print(img1_path)
-        print(folder)
-        img2_file=random.choice(os.listdir(folder))
-        img2_path=os.path.join(folder,img2_file)
-        #pose="apple"
-        pose=str(pose)
-        img1=read_image(img1_path)
-        img2=read_image(img2_path)
-        #img=self.transform(img)
-        return img1,img2,pose
-        '''
-        img1_path=self.files[index]
-        img1=read_image(img1_path)
-        pose1=self.file_pose[img1_path]
-        folder=os.path.dirname(img1_path)
-        img2_path=random.choice(self.dir_file[folder])
-        img2=read_image(img2_path)
-        pose2=self.file_pose[img2_path]
-        text=self.dir_text[folder]
-        '''
-        if(self.crop):
-            mask1_path=self.img_mask[img1_path]
-            mask1=read_image(mask1_path)
-            mask1=torch.squeeze(mask1)
-            mask2_path=self.img_mask[img2_path]
-            mask2=read_image(mask2_path)
-            mask2=torch.squeeze(mask2)
-            #img1=self.cropWithMask(img1,mask1,self.resolution)
-            #img2=self.cropWithMask(img2,mask2,self.resolution)
-            img1=self.cropWithMask(img1,mask1,512)
-            img2=self.cropWithMask(img2,mask2,512)
-        '''
+        sequence_index=index//12
+        img_pair=random.sample(self.sequence_imgs[self.sequence[sequence_index]][0],2)
+        img1=read_image(img_pair[0])
+        img2=read_image(img_pair[1])
+        pose1=self.img_camera[img_pair[0]]
+        pose2=self.img_camera[img_pair[1]]
+        text=self.sequence_imgs[self.sequence[sequence_index]][1]
         img1,mask1=self.image_transform(img1)
         img2,mask2=self.image_transform(img2)
         relative=self.relative_pose(pose1[0].numpy(),pose1[1].numpy(),pose2[0].numpy(),pose2[1].numpy())
         relative=torch.tensor(relative)
         mask1=torch.tensor(mask1)
         mask2=torch.tensor(mask2)
+        return img1,mask1,img2,mask2,relative,text
 
-        return img1,mask1,pose1,img2,mask2,pose2,relative,text
     def __len__(self):
-        return len(self.files)
-    def cropWithMask(self,img,mask,resolution):
-        mask=mask.numpy()
-        img=img.permute(1,2,0).numpy()
-        #print(img)
-        #print(img.shape)
-        x,y=(mask>0).nonzero() #bug
-        up=min(x)
-        down=max(x)
-        left=min(y)
-        right=max(y)
-        height=down-up
-        width=right-left
-        center_y=(up+down)//2
-        center_x=(left+right)//2
-        radius=max(height,width)//2
-        #print(up,down,left,right)
-        crop=img[max(0,center_y-radius):min(mask.shape[0],center_y+radius),max(0,center_x-radius):min(mask.shape[1],center_x+radius)]
-        crop=torch.from_numpy(crop)
-        crop=crop.permute(2,0,1)
-        #crop=torchvision.transforms.Resize(crop,(resolution,resolution))
-        crop=torchvision.transforms.functional.resize(crop, [resolution,resolution], interpolation=2)
-        return crop
+        return self.pairs*len(self.sequence)
+    
     #add zero to make the img to square and resize, also return mask
     def image_transform(self,img):
         C, H, W = img.shape
@@ -182,8 +116,8 @@ class MyDataset(Dataset):
     #save the text of each sequence in text.txt using blip
     def save_text(self,path):
         file=open(path,'w')
-        for seq in self.dirs:
-            img_path=random.choice(self.dir_file[seq])
+        for seq in self.sequence:
+            img_path=random.choice(self.sequence_imgs[seq][0])
             text=blip_run(img_path)
             file.write(seq)
             file.write('\n')
@@ -219,17 +153,17 @@ class MyDataset(Dataset):
         phi=math.atan(y/x)
         return r,theta,phi
     
-train_data=MyDataset("../co3d-main/dataset",512)
+train_data=MyDataset("../co3d-main/dataset","train",512,12)
 train_loader=DataLoader(train_data,batch_size=1,shuffle=False)
-for img1,mask1,pose1,img2,mask2,pose2,relative,text in train_loader:
+for img1,mask1,img2,mask2,relative,text in train_loader:
     print(img1.shape)
     print(mask1)
     #print(img1)
-    print(pose1)
+    #print(pose1)
     print(img2.shape)
     print(mask2)
     #print(img2)
-    print(pose2)
+    #print(pose2)
     print(relative)
     print(relative.shape)
     torchvision.utils.save_image(img1/255.0,"./1.png")
