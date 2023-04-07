@@ -14,6 +14,8 @@ import math
 import cv2
 import albumentations as A
 import sys
+from plyfile import PlyData
+import pandas as pd
 #print(sys.path)
 from blip.demo import blip_run
 #from models.blip import blip_decoder
@@ -54,6 +56,9 @@ class MyDataset(Dataset):
                         for data in train_data:
                             imgs.append(self.path+'/'+data[2])
                         self.sequence_imgs[sequence_path]=[imgs]
+                        ply_path=self.path+'/'+dir+'/'+train_data[0][0]+'/pointcloud.ply'
+                        origin=self.get_origin(ply_path)
+                        self.sequence_imgs[sequence_path].append(origin)
                 anno_path=self.path+'/'+dir+"/frame_annotations.jgz"
                 g_file=gzip.GzipFile(anno_path)
                 content=g_file.read()
@@ -101,7 +106,9 @@ class MyDataset(Dataset):
         img2=read_image(img2_path)
         pose1=self.img_camera[img1_path]
         pose2=self.img_camera[img2_path]
-        text=self.sequence_imgs[self.sequence[sequence_index]][1]
+        origin=self.sequence_imgs[self.sequence[sequence_index]][1]
+        print(origin)
+        text=self.sequence_imgs[self.sequence[sequence_index]][2]
         if(self.transform=="add_zero"):
             img1,mask1=self.image_transform(img1)
             img2,mask2=self.image_transform(img2)
@@ -110,11 +117,11 @@ class MyDataset(Dataset):
         elif(self.transform=="center_crop"):
             img1=self.image_transform(img1)
             img2=self.image_transform(img2)
-            print(img1)
-            print(img2)
-            torchvision.utils.save_image(img1/255.0,"./1.png")
-            torchvision.utils.save_image(img2/255.0,"./2.png")
-        relative=self.relative_pose(pose1[0].numpy(),pose1[1].numpy(),pose2[0].numpy(),pose2[1].numpy())
+            #print(img1)
+            #print(img2)
+            #torchvision.utils.save_image(img1/255.0,"./1.png")
+            #torchvision.utils.save_image(img2/255.0,"./2.png")
+        relative=self.relative_pose(pose1[0].numpy(),pose1[1].numpy(),pose2[0].numpy(),pose2[1].numpy(),origin)
         relative=torch.tensor(relative)
         relative = relative.view(-1)
         #print(text)
@@ -174,8 +181,8 @@ class MyDataset(Dataset):
             file.write('\n')
             file.write(text)
             file.write('\n')
-            print(seq)
-            print(text)
+            #print(seq)
+            #print(text)
         '''
         text=blip_run(self.files[0])
         file.write(self.files[0])
@@ -186,11 +193,11 @@ class MyDataset(Dataset):
         file.close()
 
     #pose2-pose1
-    def relative_pose(self,R1,T1,R2,T2):
+    def relative_pose(self,R1,T1,R2,T2,origin):
         pw1=np.dot(-(R1.T),T1)
         pw2=np.dot(-(R2.T),T2)
-        r1,theta1,phi1=self.cart2sph(pw1[0],pw1[1],pw1[2])
-        r2,theta2,phi2=self.cart2sph(pw2[0],pw2[1],pw2[2])
+        r1,theta1,phi1=self.cart2sph(pw1[0]-origin[0],pw1[1]-origin[1],pw1[2]-origin[2])
+        r2,theta2,phi2=self.cart2sph(pw2[0]-origin[0],pw2[1]-origin[1],pw2[2]-origin[2])
         theta=theta2-theta1
         phi=phi2-phi1
         r=r2-r1
@@ -204,6 +211,22 @@ class MyDataset(Dataset):
         phi=math.atan(y/x)
         return r,theta,phi
     
+    def get_origin(self,ply_path):
+        if(os.path.exists(ply_path)):
+            plydata = PlyData.read(ply_path)  # 读取文件
+            data = plydata.elements[0].data  # 读取数据
+            data_pd = pd.DataFrame(data)  # 转换成DataFrame, 因为DataFrame可以解析结构化的数据
+            data_np = np.zeros(data_pd.shape, dtype=np.float64)  # 初始化储存数据的array
+            property_names = data[0].dtype.names  # 读取property的名字
+            for i, name in enumerate(property_names):  # 按property读取数据，这样可以保证读出的数据是同样的数据类型。
+                data_np[:, i] = data_pd[name]
+            #print(data_np)
+            #print(data_np.shape)
+            origin=np.average(data_np[:,:3], axis=0)  # 按列求均值
+            #print(result)
+        else:
+            origin=np.zeros(3)
+        return origin
 #train_data=MyDataset("../co3d-main/dataset","train",512,12,False)
 train_data=MyDataset("../co3d-main/dataset","train",512,12,False,"center_crop")
 train_loader=DataLoader(train_data,batch_size=1,shuffle=False)
@@ -213,7 +236,7 @@ for result in train_loader:
     print(result["txt"])
     print(result["hint"].shape)
     print(result["view_linear"])
-    sys.exit(0)
+    #sys.exit(0)
 #print(train_data[0])
 #print(train_data[0][0])
 #plt.imshow(train_data[0][0].permute(1,2,0))
