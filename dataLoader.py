@@ -107,11 +107,13 @@ class MyDataset(Dataset):
         pose1=self.img_camera[img1_path]
         pose2=self.img_camera[img2_path]
         origin=self.sequence_imgs[self.sequence[sequence_index]][1]
-        print(origin)
+        #print(origin)
         text=self.sequence_imgs[self.sequence[sequence_index]][2]
         if(self.transform=="add_zero"):
             img1,mask1=self.image_transform(img1)
             img2,mask2=self.image_transform(img2)
+            #torchvision.utils.save_image(img1/255.0,"./1.png")
+            #torchvision.utils.save_image(img2/255.0,"./2.png")
             mask1=torch.tensor(mask1)
             mask2=torch.tensor(mask2)
         elif(self.transform=="center_crop"):
@@ -228,7 +230,7 @@ class MyDataset(Dataset):
             origin=np.zeros(3)
         return origin
 #train_data=MyDataset("../co3d-main/dataset","train",512,12,False)
-train_data=MyDataset("../co3d-main/dataset","train",512,12,False,"center_crop")
+train_data=MyDataset("../co3d-main/dataset","train",512,12,False,"add_zero")
 train_loader=DataLoader(train_data,batch_size=1,shuffle=False)
 for result in train_loader:
     #print(result)
@@ -237,6 +239,7 @@ for result in train_loader:
     print(result["hint"].shape)
     print(result["view_linear"])
     #sys.exit(0)
+    #continue
 #print(train_data[0])
 #print(train_data[0][0])
 #plt.imshow(train_data[0][0].permute(1,2,0))

@@ -9,3 +9,5 @@ fairscale==0.4.4
 pycocoevalcap
 opencv-python
 albumentations
+plyfile
+pandas
