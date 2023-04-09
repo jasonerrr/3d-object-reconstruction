@@ -37,7 +37,6 @@ class MyDataset(Dataset):
         #key:img_path
         #value:camera pose
         self.img_camera={}
-        self.random_images=[]
         #if(self.split=="train"):
         g=os.listdir(self.path)
         for dir in g:
@@ -91,15 +90,11 @@ class MyDataset(Dataset):
 
     def __getitem__(self,index):
         sequence_index=index//self.pairs
-        pair_id=index%self.pairs
-        if(pair_id==0):
-            self.random_images=random.sample(self.sequence_imgs[self.sequence[sequence_index]][0],2*self.pairs)
-
-
+        imgs=random.sample(self.sequence_imgs[self.sequence[sequence_index]][0],2)
         #img_pair=random.sample(self.sequence_imgs[self.sequence[sequence_index]][0],2)
         #print(img_pair)
-        img1_path=self.random_images[2*pair_id]
-        img2_path=self.random_images[2*pair_id+1]
+        img1_path=imgs[0]
+        img2_path=imgs[1]
         #print(img1_path)
         #print(img2_path)
         img1=read_image(img1_path)
@@ -230,8 +225,8 @@ class MyDataset(Dataset):
             origin=np.zeros(3)
         return origin
 #train_data=MyDataset("../co3d-main/dataset","train",512,12,False)
-train_data=MyDataset("../co3d-main/dataset","train",512,12,False,"add_zero")
-train_loader=DataLoader(train_data,batch_size=1,shuffle=False)
+train_data=MyDataset("../co3d-main/dataset","train",512,120,False,"add_zero")
+train_loader=DataLoader(train_data,batch_size=6,shuffle=True)
 for result in train_loader:
     #print(result)
     print(result["jpg"].shape)
