@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="cihai@120.92.55.168:52141" remoteFilesAllowedToDisappearOnAutoupload="false">
+    <serverData>
+      <paths name="cihai@120.92.55.168:52141">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/DATA/disk1/cihai/lrz/3d-object-reconstruction" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="cihai@120.92.55.168:52141 key">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/DATA/disk1/cihai/lrz/3d-object-reconstruction" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>
