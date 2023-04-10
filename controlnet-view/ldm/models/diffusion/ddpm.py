@@ -6,6 +6,9 @@ https://github.com/CompVis/taming-transformers
 -- merci
 """
 
+import sys
+sys.path.append(r'/DATA/disk1/cihai/lrz/3d-object-reconstruction/controlnet-view')
+
 import torch
 import torch.nn as nn
 import numpy as np

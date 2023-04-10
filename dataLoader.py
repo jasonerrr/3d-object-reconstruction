@@ -74,43 +74,42 @@ class MyDataset(Dataset):
 
 
 
-    def __getitem__(self,index):
-        sequence_index=index//self.pairs
-        pair_id=index%self.pairs
-        if(pair_id==0):
-            self.random_images=random.sample(self.sequence_imgs[self.sequence[sequence_index]][0],2*self.pairs)
+    def __getitem__(self, index):
+        sequence_index = index//self.pairs
+        pair_id = index % self.pairs
+        if pair_id == 0:
+            self.random_images = random.sample(self.sequence_imgs[self.sequence[sequence_index]][0], 2 * self.pairs)
 
-
-        #img_pair=random.sample(self.sequence_imgs[self.sequence[sequence_index]][0],2)
-        #print(img_pair)
-        img1_path=self.random_images[2*pair_id]
-        img2_path=self.random_images[2*pair_id+1]
+        # img_pair=random.sample(self.sequence_imgs[self.sequence[sequence_index]][0],2)
+        # print(img_pair)
+        img1_path = self.random_images[2 * pair_id]
+        img2_path = self.random_images[2 * pair_id + 1]
         print(img1_path)
         print(img2_path)
-        img1=read_image(img1_path)
-        img2=read_image(img2_path)
-        pose1=self.img_camera[img1_path]
-        pose2=self.img_camera[img2_path]
-        text=self.sequence_imgs[self.sequence[sequence_index]][1]
-        img1,mask1=self.image_transform(img1)
-        img2,mask2=self.image_transform(img2)
-        relative=self.relative_pose(pose1[0].numpy(),pose1[1].numpy(),pose2[0].numpy(),pose2[1].numpy())
-        relative=torch.tensor(relative)
+        img1 = read_image(img1_path)
+        img2 = read_image(img2_path)
+        pose1 = self.img_camera[img1_path]
+        pose2 = self.img_camera[img2_path]
+        text = self.sequence_imgs[self.sequence[sequence_index]][1]
+        img1, mask1 = self.image_transform(img1)
+        img2, mask2 = self.image_transform(img2)
+        relative = self.relative_pose(pose1[0].numpy(), pose1[1].numpy(), pose2[0].numpy(), pose2[1].numpy())
+        relative = torch.tensor(relative)
         relative = relative.view(-1)
-        mask1=torch.tensor(mask1)
-        mask2=torch.tensor(mask2)
+        mask1 = torch.tensor(mask1)
+        mask2 = torch.tensor(mask2)
         #print(text)
         #print(type(text))
         #return img1,mask1,img2,mask2,relative,text
         return dict(
-            jpg=img1.permute(1,2,0),
+            jpg=img1.permute(1, 2, 0),
             txt=text,
-            hint=img2.permute(1,2,0),
+            hint=img2.permute(1, 2, 0),
             view_linear=relative
         )
 
     def __len__(self):
-        return self.pairs*len(self.sequence)
+        return self.pairs * len(self.sequence)
     
     #add zero to make the img to square and resize, also return mask
     def image_transform(self,img):
@@ -175,8 +174,8 @@ class MyDataset(Dataset):
         phi=math.atan(y/x)
         return r,theta,phi
     
-train_data=MyDataset("../co3d-main/dataset","train",512,12)
-train_loader=DataLoader(train_data,batch_size=1,shuffle=False)
+train_data=MyDataset("../../yxd/dataset/co3d","train",512,12)
+train_loader=DataLoader(train_data, batch_size=6, shuffle=False)
 for result in train_loader:
     #print(result)
     print(result["jpg"].shape)
