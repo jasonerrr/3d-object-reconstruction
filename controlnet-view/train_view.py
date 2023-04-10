@@ -29,7 +29,15 @@ model.only_mid_control = only_mid_control
 
 
 # Misc
-dataset = MyDataset("../../../yxd/dataset/co3d", split="train", resolution=512, pairs=50)
+dataset = MyDataset(
+    path="../../../yxd/dataset/co3d",
+    split="train",
+    resolution=512,
+    pairs=100,
+    full_dataset=False,
+    transform="add_zero",
+    kind="car"
+)
 dataloader = DataLoader(dataset, num_workers=0, batch_size=batch_size, shuffle=False)
 logger = ImageLogger(batch_frequency=logger_freq)
 trainer = pl.Trainer(gpus=1, precision=32, callbacks=[logger], max_epochs=10000)

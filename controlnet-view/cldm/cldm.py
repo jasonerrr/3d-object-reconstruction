@@ -1,10 +1,10 @@
+import sys
+sys.path.append(r'/DATA/disk1/cihai/lrz/3d-object-reconstruction/controlnet-view')
+
 import einops
 import torch
 import torch as th
 import torch.nn as nn
-
-import sys
-sys.path.append(r'/DATA/disk1/cihai/lrz/3d-object-reconstruction/controlnet-view')
 
 from ldm.modules.diffusionmodules.util import (
     conv_nd,
