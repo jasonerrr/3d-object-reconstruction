@@ -22,10 +22,11 @@ from blip.demo import blip_run
 class MyDataset(Dataset):
     #split in ["train","val","test"]
     #transform in ["add_zero","center_crop"]
-    def __init__(self,path,split,resolution,pairs,full_dataset,transform):
+    def __init__(self,path,split,resolution,pairs,full_dataset,transform,kind=""):
         self.path=path
         self.resolution=resolution
         self.sequence=[]
+        self.kind=kind
         #split in ["train","val","test"]
         self.split=split
         self.transform=transform
@@ -41,6 +42,8 @@ class MyDataset(Dataset):
         g=os.listdir(self.path)
         for dir in g:
             if(dir[0]!='_' and '.' not in dir):
+                if(self.kind!="" and self.kind!=dir):
+                    continue
                 #self.sequence.append(self.path+'/'+dir)
                 seq_path=self.path+'/'+dir+'/'+"set_lists"
                 seqs=os.listdir(seq_path)
@@ -82,7 +85,8 @@ class MyDataset(Dataset):
             if(len(dir)==0):
                 break
             dir=self.path+'/'+dir
-            self.sequence_imgs[dir.replace('\n','')].append(text.replace('\n',''))
+            if(dir.replace('\n','') in self.sequence_imgs):
+                self.sequence_imgs[dir.replace('\n','')].append(text.replace('\n',''))
         f.close()
 
 
@@ -225,7 +229,7 @@ class MyDataset(Dataset):
             origin=np.zeros(3)
         return origin
 #train_data=MyDataset("../co3d-main/dataset","train",512,12,False)
-train_data=MyDataset("../co3d-main/dataset","train",512,120,False,"add_zero")
+train_data=MyDataset("../co3d-main/dataset","train",512,120,False,"add_zero","car")
 train_loader=DataLoader(train_data,batch_size=6,shuffle=True)
 for result in train_loader:
     #print(result)

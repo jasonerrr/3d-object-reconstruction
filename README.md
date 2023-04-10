@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 3d-object-reconstruction
 ## This is a dataLoader
 ### Introduction
@@ -9,3 +10,6 @@ resolution: an integer, the image transformer will return an image of size resol
 pairs: an integer, howmany pairs of images you want in an sequence  
 full_dataset: boolean, True means you want to use the full co3d dataset of size 5.5T, False means you want to use single-sequence dataset subset of size 8.9G  
 transform: choose from "add_zero", "center_crop", define which transform method you want to use  
+=======
+# 3d-object-reconstruction
+>>>>>>> b76eb7549fd801f2f95a229ebf88f84b5dd6ad26

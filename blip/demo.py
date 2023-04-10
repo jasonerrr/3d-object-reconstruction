@@ -27,7 +27,11 @@ def blip_run(path):
     image_size = 384
     image = load_demo_image(image_size=image_size, device=device,path=path)
 
+<<<<<<< HEAD
     model_url = './blip/model_base_capfilt_large.pth'
+=======
+    model_url = 'https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base_capfilt_large.pth'
+>>>>>>> b76eb7549fd801f2f95a229ebf88f84b5dd6ad26
         
     model = blip_decoder(pretrained=model_url, image_size=image_size, vit='base')
     model.eval()

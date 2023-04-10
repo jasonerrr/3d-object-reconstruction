@@ -2,6 +2,10 @@ import os
 import json
 from blip.demo import blip_run
 path="./co3d"
+<<<<<<< HEAD
+=======
+os.environ['NO_PROXY'] = 'huggingface.co' 
+>>>>>>> b76eb7549fd801f2f95a229ebf88f84b5dd6ad26
 g=os.listdir(path)
 f=open("full_text.txt",'w')
 for dir in g:
