@@ -132,7 +132,7 @@ class MyDataset(Dataset):
         # return img1,mask1,img2,mask2,relative,text
         return dict(
             jpg=img1.permute(1, 2, 0),
-            txt=text,
+            txt="An image",
             hint=img2.permute(1, 2, 0),
             view_linear=relative
         )

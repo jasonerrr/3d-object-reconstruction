@@ -38,7 +38,7 @@ dataset = MyDataset(
     transform="add_zero",
     kind="car"
 )
-dataloader = DataLoader(dataset, num_workers=0, batch_size=batch_size, shuffle=False)
+dataloader = DataLoader(dataset, num_workers=0, batch_size=batch_size, shuffle=True)
 logger = ImageLogger(batch_frequency=logger_freq)
 trainer = pl.Trainer(gpus=1, precision=32, callbacks=[logger], max_epochs=10000)
 
