@@ -197,8 +197,8 @@ class MyDataset(Dataset):
 
     # pose2-pose1
     def relative_pose(self, R1, T1, R2, T2, origin):
-        pw1 = np.dot(-(R1.T), T1)
-        pw2 = np.dot(-(R2.T), T2)
+        pw1 = np.dot(-R1.T, T1)
+        pw2 = np.dot(-R2.T, T2)
         r1, theta1, phi1 = self.cart2sph(pw1[0] - origin[0], pw1[1] - origin[1], pw1[2] - origin[2])
         r2, theta2, phi2 = self.cart2sph(pw2[0] - origin[0], pw2[1] - origin[1], pw2[2] - origin[2])
         theta = theta2 - theta1

@@ -381,24 +381,33 @@ class ControlLDM(LatentDiffusion):
                 linear(2 * linear_n_freq + 1, self.control_model.context_dim),
                 BasicTransformerBlock(
                     dim=self.control_model.context_dim,
-                    n_heads=16, d_head=64,
+                    n_heads=8, d_head=128,
                     dropout=0.0,
-                    context_dim=None,
+                    context_dim=self.control_model.context_dim,
                     gated_ff=True,
                     checkpoint=False,
                     disable_self_attn=False
                 ),
                 BasicTransformerBlock(
                     dim=self.control_model.context_dim,
-                    n_heads=16, d_head=64,
+                    n_heads=8, d_head=128,
                     dropout=0.0,
-                    context_dim=None,
+                    context_dim=self.control_model.context_dim,
                     gated_ff=True,
                     checkpoint=False,
                     disable_self_attn=False
-                )
+                ),
+                BasicTransformerBlock(
+                    dim=self.control_model.context_dim,
+                    n_heads=8, d_head=128,
+                    dropout=0.0,
+                    context_dim=self.control_model.context_dim,
+                    gated_ff=True,
+                    checkpoint=False,
+                    disable_self_attn=False
+                ),
+                nn.LayerNorm(self.control_model.context_dim)
             )
-
 
     @torch.no_grad()
     def get_input(self, batch, k, bs=None, *args, **kwargs):
@@ -426,14 +435,17 @@ class ControlLDM(LatentDiffusion):
             if self.clip_hint_end is not None:
                 hint_clip_embedding = self.clip_hint_end(hint_clip_embedding)
 
-            hint_clip_embedding = hint_clip_embedding.unsqueeze(dim=1)
+            hint_clip_embedding = hint_clip_embedding.unsqueeze(dim=1).repeat(1, self.linear_view_dim, 1)
             # print('hint_clip_shape:', hint_clip_embedding.shape)
 
         if self.use_linear_view_cond is True:
             # print('use linear view cond')
             guided_view_linear \
                 = self.linear_view_encoding(view_linear).view(-1, self.linear_view_channels, self.linear_view_dim).permute(0, 2, 1)
-            guided_view_linear = self.linear_input_view_blocks(guided_view_linear)
+            guided_view_linear = self.linear_input_view_blocks[0](guided_view_linear)
+            for i_layer in range(1, 4, 1):
+                guided_view_linear = self.linear_input_view_blocks[i_layer](guided_view_linear, hint_clip_embedding)
+            guided_view_linear = self.linear_input_view_blocks[-1](guided_view_linear)
             # print('guided_view_linear:', guided_view_linear.shape)
 
         return x, dict(
