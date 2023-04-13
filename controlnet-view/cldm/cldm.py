@@ -15,7 +15,7 @@ from ldm.modules.diffusionmodules.util import (
 
 from einops import rearrange, repeat
 from torchvision.utils import make_grid
-from ldm.modules.attention import SpatialTransformer
+from ldm.modules.attention import SpatialTransformer, BasicTransformerBlock
 from ldm.modules.diffusionmodules.openaimodel import UNetModel, TimestepEmbedSequential, ResBlock, Downsample, AttentionBlock
 from ldm.models.diffusion.ddpm import LatentDiffusion
 from ldm.util import log_txt_as_img, exists, instantiate_from_config
@@ -61,13 +61,6 @@ class ControlNet(nn.Module):
             hint_channels,
             num_res_blocks,
             attention_resolutions,
-
-            use_linear_view_cond=True,
-            linear_view_dim=None,
-            linear_n_freq=None,
-
-            use_clip_hint=False,
-
             dropout=0,
             channel_mult=(1, 2, 4, 8),
             conv_resample=True,
@@ -95,6 +88,7 @@ class ControlNet(nn.Module):
             assert context_dim is not None, 'Fool!! You forgot to include the dimension of your cross-attention conditioning...'
 
         if context_dim is not None:
+            self.context_dim = context_dim
             assert use_spatial_transformer, 'Fool!! You forgot to use the spatial transformer for your cross-attention conditioning...'
             from omegaconf.listconfig import ListConfig
             if type(context_dim) == ListConfig:
@@ -131,18 +125,6 @@ class ControlNet(nn.Module):
                   f"i.e., in cases where num_attention_blocks[i] > 0 but 2**i not in attention_resolutions, "
                   f"attention will still not be set.")
 
-        if use_clip_hint is True:
-            self.use_clip_hint = True
-            self.clip_hint = FrozenOpenCLIPImg(device='cpu')
-            if context_dim != 1024:
-                self.clip_hint_end = nn.Sequential(
-                    linear(1024, context_dim),
-                )
-            else:
-                self.clip_hint_end = None
-        else:
-            self.use_clip_hint = False
-            self.clip_hint = None
 
         self.attention_resolutions = attention_resolutions
         self.dropout = dropout
@@ -188,40 +170,6 @@ class ControlNet(nn.Module):
             nn.SiLU(),
             zero_module(conv_nd(dims, 256, model_channels, 3, padding=1))
         )
-
-        '''
-            vieww encoding modules
-        '''
-        assert type(use_linear_view_cond) == bool
-        self.use_linear_view_cond = use_linear_view_cond
-
-        if use_linear_view_cond is True:
-            assert linear_view_dim is not None
-            assert linear_n_freq is not None
-            '''
-                add in the cross attention style view
-                condition in the control-net branch.
-
-                convert the batched view shape 
-                    shape (B, view_dim)
-                into encoded one using the FreqEncoder shape
-                    shape (B, view_dim, view_channels)
-                then use a network to change the 
-                number of the view_channels into context_dim
-                    shape (B, view_dim, context_dim)
-            '''
-            self.linear_view_dim = linear_view_dim
-            self.linear_view_channels = 2 * linear_n_freq + 1
-            self.linear_view_encoding = FreqEncoder_torch(
-                input_dim=linear_view_dim,
-                max_freq_log2=(linear_n_freq - 1),
-                N_freqs=linear_n_freq
-            )
-            self.linear_input_view_blocks = TimestepEmbedSequential(
-                linear(2 * linear_n_freq + 1, context_dim),
-                nn.SiLU(),
-                linear(context_dim, context_dim)
-            )
 
         self._feature_size = model_channels
         input_block_chans = [model_channels]
@@ -342,47 +290,24 @@ class ControlNet(nn.Module):
     def make_zero_conv(self, channels):
         return TimestepEmbedSequential(zero_module(conv_nd(self.dims, channels, channels, 1, padding=0)))
 
-    def forward(self, x, hint, view_linear, timesteps, context, **kwargs):
+    def forward(self, x, hint, timesteps, context, **kwargs):
         t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
         emb = self.time_embed(t_emb)
 
-        context_cat = context
-        # print('context_cat shape(only text clip):', context_cat.shape)
-        # guided_view_plane = None
-
-        if self.use_clip_hint is True:
-            assert self.clip_hint is not None
-            hint_clip_embedding = self.clip_hint.encode(hint)
-            if self.clip_hint_end is not None:
-                hint_clip_embedding = self.clip_hint_end(hint_clip_embedding)
-            # print('hint_clip_embedding shape:', hint_clip_embedding.shape)
-            context_cat = torch.cat([hint_clip_embedding.unsqueeze(1), context_cat], dim=-2)
-            # print('context_cat shape(+ img clip enc):', context_cat.shape)
-
-        if self.use_linear_view_cond is True:
-            # print('use linear view cond')
-            guided_view_linear \
-                = self.linear_view_encoding(view_linear).view(-1, self.linear_view_channels,
-                                                              self.linear_view_dim).permute(0, 2, 1)
-            # print(guided_view_linear.shape)
-            guided_view_linear = self.linear_input_view_blocks(guided_view_linear, emb)
-            context_cat = torch.cat([context_cat, guided_view_linear], dim=-2)
-            # print('context_cat shape(+ view enc):', context_cat.shape)
-
-        guided_hint = self.input_hint_block(hint, emb, context_cat)
+        guided_hint = self.input_hint_block(hint, emb, context)
 
         outs = []
 
         h = x.type(self.dtype)
         for module, zero_conv in zip(self.input_blocks, self.zero_convs):
-            h = module(h, emb, context_cat)
+            h = module(h, emb, context)
             if guided_hint is not None:
                 h += guided_hint
                 guided_hint = None
-            outs.append(zero_conv(h, emb, context_cat))
+            outs.append(zero_conv(h, emb, context))
 
-        h = self.middle_block(h, emb, context_cat)
-        outs.append(self.middle_block_out(h, emb, context_cat))
+        h = self.middle_block(h, emb, context)
+        outs.append(self.middle_block_out(h, emb, context))
 
         return outs
 
@@ -391,6 +316,8 @@ class ControlLDM(LatentDiffusion):
 
     def __init__(
             self, control_stage_config, control_key, view_keys, only_mid_control,
+            use_clip_hint=False,
+            use_linear_view_cond=True, linear_view_dim=None, linear_n_freq=None,
             *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -400,9 +327,83 @@ class ControlLDM(LatentDiffusion):
         self.only_mid_control = only_mid_control
         self.control_scales = [1.0] * 13
 
+        if use_clip_hint is True:
+            self.use_clip_hint = True
+            self.clip_hint = FrozenOpenCLIPImg(device='cpu')
+            if self.control_model.context_dim != 1024:
+                print('need to align the clip img dimension with the context dimension of ctrl net')
+                self.clip_hint_end = nn.Sequential(
+                    linear(1024, self.control_model.context_dim)
+                )
+            else:
+                self.clip_hint_end = None
+        else:
+            self.use_clip_hint = False
+            self.clip_hint = None
+
+        '''
+            view encoding modules
+        '''
+        assert type(use_linear_view_cond) == bool
+        self.use_linear_view_cond = use_linear_view_cond
+
+        if use_linear_view_cond is True:
+            assert linear_view_dim is not None
+            assert linear_n_freq is not None
+            '''
+                add in the cross attention style view
+                condition in the control-net branch.
+
+                convert the batched view shape 
+                    shape (B, view_dim)
+                into encoded one using the FreqEncoder shape
+                    shape (B, view_dim, view_channels)
+                then use a network to change the 
+                number of the view_channels into context_dim
+                    shape (B, view_dim, context_dim)
+            '''
+            self.linear_view_dim = linear_view_dim
+            self.linear_view_channels = 2 * linear_n_freq + 1
+            self.linear_view_encoding = FreqEncoder_torch(
+                input_dim=linear_view_dim,
+                max_freq_log2=(linear_n_freq - 1),
+                N_freqs=linear_n_freq
+            )
+            '''
+            self.linear_input_view_blocks = nn.Sequential(
+                linear(2 * linear_n_freq + 1, self.control_model.context_dim),
+                nn.SiLU(),
+                linear(self.control_model.context_dim, self.control_model.context_dim)
+            )
+            '''
+            self.linear_input_view_blocks = nn.Sequential(
+                # nn.LayerNorm(2 * linear_n_freq + 1),
+                linear(2 * linear_n_freq + 1, self.control_model.context_dim),
+                BasicTransformerBlock(
+                    dim=self.control_model.context_dim,
+                    n_heads=16, d_head=64,
+                    dropout=0.0,
+                    context_dim=None,
+                    gated_ff=True,
+                    checkpoint=False,
+                    disable_self_attn=False
+                ),
+                BasicTransformerBlock(
+                    dim=self.control_model.context_dim,
+                    n_heads=16, d_head=64,
+                    dropout=0.0,
+                    context_dim=None,
+                    gated_ff=True,
+                    checkpoint=False,
+                    disable_self_attn=False
+                )
+            )
+
+
     @torch.no_grad()
     def get_input(self, batch, k, bs=None, *args, **kwargs):
         x, c = super().get_input(batch, self.first_stage_key, *args, **kwargs)
+        # print('c_crossattn original shape:', c.shape)
         control = batch[self.control_key]
         view_linear = batch[self.view_keys['view_linear']]
         if bs is not None:
@@ -416,10 +417,28 @@ class ControlLDM(LatentDiffusion):
         control = control.to(memory_format=torch.contiguous_format).float()
         view_linear = view_linear.to(memory_format=torch.contiguous_format).float()
 
+        hint_clip_embedding = None
+        guided_view_linear = None
+
+        if self.use_clip_hint is True:
+            assert self.clip_hint is not None
+            hint_clip_embedding = self.clip_hint.encode(control)
+            if self.clip_hint_end is not None:
+                hint_clip_embedding = self.clip_hint_end(hint_clip_embedding)
+
+            hint_clip_embedding = hint_clip_embedding.unsqueeze(dim=1)
+            # print('hint_clip_shape:', hint_clip_embedding.shape)
+
+        if self.use_linear_view_cond is True:
+            # print('use linear view cond')
+            guided_view_linear \
+                = self.linear_view_encoding(view_linear).view(-1, self.linear_view_channels, self.linear_view_dim).permute(0, 2, 1)
+            guided_view_linear = self.linear_input_view_blocks(guided_view_linear)
+            # print('guided_view_linear:', guided_view_linear.shape)
+
         return x, dict(
-            c_crossattn=[c],
+            c_crossattn=[torch.cat([hint_clip_embedding, guided_view_linear], dim=1)],
             c_concat=[control],
-            c_view_linear=view_linear
         )
 
     def apply_model(self, x_noisy, t, cond, *args, **kwargs):
@@ -441,7 +460,6 @@ class ControlLDM(LatentDiffusion):
             control = self.control_model(
                 x=x_noisy,
                 hint=torch.cat(cond['c_concat'], 1),
-                view_linear=cond['c_view_linear'],
                 timesteps=t,
                 context=cond_txt
             )
@@ -469,7 +487,7 @@ class ControlLDM(LatentDiffusion):
 
         log = dict()
         z, c = self.get_input(batch, self.first_stage_key, bs=N)
-        c_cat, c, c_view = c["c_concat"][0][:N], c["c_crossattn"][0][:N], c["c_view_linear"][:N]
+        c_cat, c = c["c_concat"][0][:N], c["c_crossattn"][0][:N]
         # N = min(z.shape[0], N)
         N = z.shape[0]
         n_row = min(z.shape[0], n_row)
@@ -501,7 +519,7 @@ class ControlLDM(LatentDiffusion):
 
         if sample:
             # get denoise row
-            samples, z_denoise_row = self.sample_log(cond={"c_concat": [c_cat], "c_crossattn": [c], "c_view_linear": c_view},
+            samples, z_denoise_row = self.sample_log(cond={"c_concat": [c_cat], "c_crossattn": [c]},
                                                      batch_size=N, ddim=use_ddim,
                                                      ddim_steps=ddim_steps, eta=ddim_eta)
             x_samples = self.decode_first_stage(samples)
@@ -511,11 +529,12 @@ class ControlLDM(LatentDiffusion):
                 log["denoise_row"] = denoise_grid
 
         if unconditional_guidance_scale > 1.0:
-            uc_cross = self.get_unconditional_conditioning(N)
+            # uc_cross = self.get_unconditional_conditioning(N)
+            uc_cross = torch.zeros_like(c)
+            # print("uc_cross:", uc_cross.shape)
             uc_cat = c_cat  # torch.zeros_like(c_cat)
-            uc_view = c_view
-            uc_full = {"c_concat": [uc_cat], "c_crossattn": [uc_cross], "c_view_linear": uc_view}
-            samples_cfg, _ = self.sample_log(cond={"c_concat": [c_cat], "c_crossattn": [c], "c_view_linear": c_view},
+            uc_full = {"c_concat": [uc_cat], "c_crossattn": [uc_cross]}
+            samples_cfg, _ = self.sample_log(cond={"c_concat": [c_cat], "c_crossattn": [c]},
                                              batch_size=N, ddim=use_ddim,
                                              ddim_steps=ddim_steps, eta=ddim_eta,
                                              unconditional_guidance_scale=unconditional_guidance_scale,

@@ -21,6 +21,12 @@ model:
     use_ema: False
     only_mid_control: False
 
+    use_clip_hint: True
+
+    use_linear_view_cond: True
+    linear_view_dim: 4
+    linear_n_freq: 6
+
     control_stage_config:
       target: cldm.cldm.ControlNet
       params:
@@ -38,12 +44,6 @@ model:
         transformer_depth: 1
         context_dim: 1024
         legacy: False
-
-        linear_view_dim: 4
-        linear_n_freq: 6
-        use_linear_view_cond: True
-
-        use_clip_hint: True
 
     unet_config:
       target: cldm.cldm.ControlledUnetModel

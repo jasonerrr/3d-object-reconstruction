@@ -9,7 +9,7 @@ from cldm.logger import ImageLogger
 from cldm.model import create_model, load_state_dict
 
 shutil.rmtree('image_log')
-shutil.rmtree('lightning_logs')
+# shutil.rmtree('lightning_logs')
 
 # Configs
 resume_path = './models/control_sd21_view_ini.ckpt'
