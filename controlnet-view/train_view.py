@@ -35,7 +35,7 @@ dataset = MyDataset(
     resolution=512,
     pairs=100,
     full_dataset=False,
-    transform="add_zero",
+    transform="center_crop",
     kind="car"
 )
 dataloader = DataLoader(dataset, num_workers=0, batch_size=batch_size, shuffle=True)
