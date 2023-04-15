@@ -1,3 +1,6 @@
+import sys
+sys.path.append(r'/DATA/disk1/cihai/lrz/3d-object-reconstruction/controlnet-view')
+
 import einops
 import torch
 import torch as th
@@ -19,6 +22,8 @@ from ldm.util import log_txt_as_img, exists, instantiate_from_config
 from ldm.models.diffusion.ddim import DDIMSampler
 
 from .encoding import FreqEncoder_torch
+
+from .clip_img import FrozenOpenCLIPImg
 
 
 class ControlledUnetModel(UNetModel):
@@ -60,6 +65,8 @@ class ControlNet(nn.Module):
             use_linear_view_cond=True,
             linear_view_dim=None,
             linear_n_freq=None,
+
+            use_clip_hint=False,
 
             dropout=0,
             channel_mult=(1, 2, 4, 8),
@@ -123,6 +130,19 @@ class ControlNet(nn.Module):
                   f"This option has LESS priority than attention_resolutions {attention_resolutions}, "
                   f"i.e., in cases where num_attention_blocks[i] > 0 but 2**i not in attention_resolutions, "
                   f"attention will still not be set.")
+
+        if use_clip_hint is True:
+            self.use_clip_hint = True
+            self.clip_hint = FrozenOpenCLIPImg(device='cpu')
+            if context_dim != 1024:
+                self.clip_hint_end = nn.Sequential(
+                    linear(1024, context_dim),
+                )
+            else:
+                self.clip_hint_end = None
+        else:
+            self.use_clip_hint = False
+            self.clip_hint = None
 
         self.attention_resolutions = attention_resolutions
         self.dropout = dropout
@@ -327,7 +347,17 @@ class ControlNet(nn.Module):
         emb = self.time_embed(t_emb)
 
         context_cat = context
+        # print('context_cat shape(only text clip):', context_cat.shape)
         # guided_view_plane = None
+
+        if self.use_clip_hint is True:
+            assert self.clip_hint is not None
+            hint_clip_embedding = self.clip_hint.encode(hint)
+            if self.clip_hint_end is not None:
+                hint_clip_embedding = self.clip_hint_end(hint_clip_embedding)
+            # print('hint_clip_embedding shape:', hint_clip_embedding.shape)
+            context_cat = torch.cat([hint_clip_embedding.unsqueeze(1), context_cat], dim=-2)
+            # print('context_cat shape(+ img clip enc):', context_cat.shape)
 
         if self.use_linear_view_cond is True:
             # print('use linear view cond')
@@ -337,6 +367,7 @@ class ControlNet(nn.Module):
             # print(guided_view_linear.shape)
             guided_view_linear = self.linear_input_view_blocks(guided_view_linear, emb)
             context_cat = torch.cat([context_cat, guided_view_linear], dim=-2)
+            # print('context_cat shape(+ view enc):', context_cat.shape)
 
         guided_hint = self.input_hint_block(hint, emb, context_cat)
 
@@ -360,14 +391,9 @@ class ControlLDM(LatentDiffusion):
 
     def __init__(
             self, control_stage_config, control_key, view_keys, only_mid_control,
-            use_control_parallel=False, control_device=None,
             *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
-        self.use_control_parallel = use_control_parallel
-        self.control_device = control_device
-        self.control_shift_done = False
-
         self.control_model = instantiate_from_config(control_stage_config)
         self.control_key = control_key
         self.view_keys = view_keys
@@ -376,16 +402,14 @@ class ControlLDM(LatentDiffusion):
 
     @torch.no_grad()
     def get_input(self, batch, k, bs=None, *args, **kwargs):
-        # print('in get_input of ContorlLDM, the batch is:', batch)
         x, c = super().get_input(batch, self.first_stage_key, *args, **kwargs)
-        # print('in get_input of ContorlLDM, the size of x is:', x.shape)
         control = batch[self.control_key]
-        view_linear = (batch[self.view_keys['view_linear']]).to(self.device)
+        view_linear = batch[self.view_keys['view_linear']]
         if bs is not None:
             control = control[:bs]
             view_linear = view_linear[:bs]
-        control = control.to(self.control_device)
-        view_linear = view_linear.to(self.control_device)
+        control = control.to(self.device)
+        view_linear = view_linear.to(self.device)
 
         control = einops.rearrange(control, 'b h w c -> b c h w')
 
@@ -414,19 +438,14 @@ class ControlLDM(LatentDiffusion):
                 only_mid_control=self.only_mid_control
             )
         else:
-            # use control-net
-            if self.use_control_parallel is True and self.control_shift_done is False:
-                self.control_model = self.control_model.to(self.control_device)
-                self.control_shift_done = True
-
             control = self.control_model(
-                x=x_noisy.to(self.control_device),
+                x=x_noisy,
                 hint=torch.cat(cond['c_concat'], 1),
                 view_linear=cond['c_view_linear'],
-                timesteps=t.to(self.control_device),
-                context=cond_txt.to(self.control_device)
+                timesteps=t,
+                context=cond_txt
             )
-            control = [c.to(self.device) * scale for c, scale in zip(control, self.control_scales)]
+            control = [c * scale for c, scale in zip(control, self.control_scales)]
             eps = diffusion_model(
                 x=x_noisy,
                 timesteps=t,
@@ -449,17 +468,16 @@ class ControlLDM(LatentDiffusion):
         use_ddim = ddim_steps is not None
 
         log = dict()
-        # print(batch)
-
         z, c = self.get_input(batch, self.first_stage_key, bs=N)
         c_cat, c, c_view = c["c_concat"][0][:N], c["c_crossattn"][0][:N], c["c_view_linear"][:N]
-        N = min(z.shape[0], N)
+        # N = min(z.shape[0], N)
+        N = z.shape[0]
         n_row = min(z.shape[0], n_row)
-        # print("jpg:", type(batch["jpg"]), batch["jpg"].shape)
+
         log["target_view"] = (batch["jpg"].float() / 255.0).permute(0, 3, 1, 2)
         log["hint_view"] = (batch["hint"].float() / 255.0).permute(0, 3, 1, 2)
+
         log["reconstruction"] = self.decode_first_stage(z)
-        # print("reconstruction:", type(log["reconstruction"]), log["reconstruction"].shape)
         log["control"] = c_cat * 2.0 - 1.0
         log["conditioning"] = log_txt_as_img((512, 512), batch[self.cond_stage_key], size=16)
 
@@ -505,8 +523,6 @@ class ControlLDM(LatentDiffusion):
                                              )
             x_samples_cfg = self.decode_first_stage(samples_cfg)
             log[f"samples_cfg_scale_{unconditional_guidance_scale:.2f}"] = x_samples_cfg
-
-        print(log)
 
         return log
 
