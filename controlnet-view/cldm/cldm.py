@@ -431,12 +431,15 @@ class ControlLDM(LatentDiffusion):
 
         if self.use_clip_hint is True:
             assert self.clip_hint is not None
-            hint_clip_embedding = self.clip_hint.encode(control)
+            hint_clip_embedding_ctrl = self.clip_hint.encode(control)
+            hint_clip_embedding_diff = self.clip_hint.encode_five(control)
             if self.clip_hint_end is not None:
-                hint_clip_embedding = self.clip_hint_end(hint_clip_embedding)
+                hint_clip_embedding_ctrl = self.clip_hint_end(hint_clip_embedding_ctrl)
+                hint_clip_embedding_diff = self.clip_hint_end(hint_clip_embedding_diff)
 
-            hint_clip_embedding = hint_clip_embedding.unsqueeze(dim=1).repeat(1, self.linear_view_dim, 1)
-            # print('hint_clip_shape:', hint_clip_embedding.shape)
+            hint_clip_embedding_ctrl = hint_clip_embedding_ctrl.unsqueeze(dim=1)
+            # print('hint_clip_embedding_ctrl shape:', hint_clip_embedding_ctrl.shape)
+            # print('hint_clip_embedding_diff shape:', hint_clip_embedding_diff.shape)
 
         if self.use_linear_view_cond is True:
             # print('use linear view cond')
@@ -444,12 +447,13 @@ class ControlLDM(LatentDiffusion):
                 = self.linear_view_encoding(view_linear).view(-1, self.linear_view_channels, self.linear_view_dim).permute(0, 2, 1)
             guided_view_linear = self.linear_input_view_blocks[0](guided_view_linear)
             for i_layer in range(1, 4, 1):
-                guided_view_linear = self.linear_input_view_blocks[i_layer](guided_view_linear, hint_clip_embedding)
+                guided_view_linear = self.linear_input_view_blocks[i_layer](guided_view_linear, hint_clip_embedding_diff)
             guided_view_linear = self.linear_input_view_blocks[-1](guided_view_linear)
             # print('guided_view_linear:', guided_view_linear.shape)
 
         return x, dict(
-            c_crossattn=[torch.cat([hint_clip_embedding, guided_view_linear], dim=1)],
+            c_crossattn_ctrl=[torch.cat([hint_clip_embedding_ctrl, guided_view_linear], dim=1)],
+            c_crossattn_diff=[hint_clip_embedding_diff],
             c_concat=[control],
         )
 
@@ -457,14 +461,15 @@ class ControlLDM(LatentDiffusion):
         assert isinstance(cond, dict)
         diffusion_model = self.model.diffusion_model
 
-        cond_txt = torch.cat(cond['c_crossattn'], 1)
+        cond_ctrl = torch.cat(cond['c_crossattn_ctrl'], 1)
+        cond_diff = torch.cat(cond['c_crossattn_diff'], 1)
         # print(f'cond is: {cond}, t is: {t}')
 
         if cond['c_concat'] is None:
             eps = diffusion_model(
                 x=x_noisy,
                 timesteps=t,
-                context=cond_txt,
+                context=cond_diff,
                 control=None,
                 only_mid_control=self.only_mid_control
             )
@@ -473,13 +478,13 @@ class ControlLDM(LatentDiffusion):
                 x=x_noisy,
                 hint=torch.cat(cond['c_concat'], 1),
                 timesteps=t,
-                context=cond_txt
+                context=cond_ctrl
             )
             control = [c * scale for c, scale in zip(control, self.control_scales)]
             eps = diffusion_model(
                 x=x_noisy,
                 timesteps=t,
-                context=cond_txt,
+                context=cond_diff,
                 control=control,
                 only_mid_control=self.only_mid_control
             )
@@ -490,7 +495,7 @@ class ControlLDM(LatentDiffusion):
         return self.get_learned_conditioning([""] * N)
 
     @torch.no_grad()
-    def log_images(self, batch, N=4, n_row=2, sample=False, ddim_steps=50, ddim_eta=0.0, return_keys=None,
+    def log_images(self, batch, N=4, n_row=2, sample=True, ddim_steps=50, ddim_eta=0.0, return_keys=None,
                    quantize_denoised=True, inpaint=True, plot_denoise_rows=False, plot_progressive_rows=True,
                    plot_diffusion_rows=False, unconditional_guidance_scale=9.0, unconditional_guidance_label=None,
                    use_ema_scope=True,
@@ -499,9 +504,8 @@ class ControlLDM(LatentDiffusion):
 
         log = dict()
         z, c = self.get_input(batch, self.first_stage_key, bs=N)
-        c_cat, c = c["c_concat"][0][:N], c["c_crossattn"][0][:N]
-        # N = min(z.shape[0], N)
-        N = z.shape[0]
+        c_cat, c_ctrl, c_diff = c["c_concat"][0][:N], c["c_crossattn_ctrl"][0][:N], c["c_crossattn_diff"][0][:N]
+        N = min(z.shape[0], N)
         n_row = min(z.shape[0], n_row)
 
         log["target_view"] = (batch["jpg"].float() / 255.0).permute(0, 3, 1, 2)
@@ -531,9 +535,17 @@ class ControlLDM(LatentDiffusion):
 
         if sample:
             # get denoise row
-            samples, z_denoise_row = self.sample_log(cond={"c_concat": [c_cat], "c_crossattn": [c]},
-                                                     batch_size=N, ddim=use_ddim,
-                                                     ddim_steps=ddim_steps, eta=ddim_eta)
+            samples, z_denoise_row = self.sample_log(
+                cond={
+                    "c_concat": [c_cat],
+                    "c_crossattn_ctrl": [c_ctrl],
+                    "c_crossattn_diff": [c_diff]
+                },
+                batch_size=N,
+                ddim=use_ddim,
+                ddim_steps=ddim_steps,
+                eta=ddim_eta
+            )
             x_samples = self.decode_first_stage(samples)
             log["samples"] = x_samples
             if plot_denoise_rows:
@@ -542,16 +554,22 @@ class ControlLDM(LatentDiffusion):
 
         if unconditional_guidance_scale > 1.0:
             # uc_cross = self.get_unconditional_conditioning(N)
-            uc_cross = torch.zeros_like(c)
+            uc_ctrl = torch.zeros_like(c_ctrl)
+            uc_diff = torch.zeros_like(c_diff)
             # print("uc_cross:", uc_cross.shape)
             uc_cat = c_cat  # torch.zeros_like(c_cat)
-            uc_full = {"c_concat": [uc_cat], "c_crossattn": [uc_cross]}
-            samples_cfg, _ = self.sample_log(cond={"c_concat": [c_cat], "c_crossattn": [c]},
-                                             batch_size=N, ddim=use_ddim,
-                                             ddim_steps=ddim_steps, eta=ddim_eta,
-                                             unconditional_guidance_scale=unconditional_guidance_scale,
-                                             unconditional_conditioning=uc_full,
-                                             )
+            uc_full = {"c_concat": [uc_cat], "c_crossattn_ctrl": [uc_ctrl], "c_crossattn_diff": [uc_diff]}
+            samples_cfg, _ = self.sample_log(
+                cond={
+                    "c_concat": [c_cat],
+                    "c_crossattn_ctrl": [c_ctrl],
+                    "c_crossattn_diff": [c_diff]
+                },
+                batch_size=N, ddim=use_ddim,
+                ddim_steps=ddim_steps, eta=ddim_eta,
+                unconditional_guidance_scale=unconditional_guidance_scale,
+                unconditional_conditioning=uc_full,
+            )
             x_samples_cfg = self.decode_first_stage(samples_cfg)
             log[f"samples_cfg_scale_{unconditional_guidance_scale:.2f}"] = x_samples_cfg
 
