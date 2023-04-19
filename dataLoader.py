@@ -1,5 +1,5 @@
 from torch.utils.data import Dataset, DataLoader
-from torchvision.io import read_image
+from torchvision.io import read_image,ImageReadMode
 import torchvision
 import random
 import torch
@@ -16,11 +16,9 @@ import albumentations as A
 import sys
 from plyfile import PlyData
 import pandas as pd
-# print(sys.path)
-from blip.demo import blip_run
-
-
-# from models.blip import blip_decoder
+#print(sys.path)
+#from blip.demo import blip_run
+#from models.blip import blip_decoder
 class MyDataset(Dataset):
     # split in ["train","val","test"]
     # transform in ["add_zero","center_crop"]
@@ -198,9 +196,9 @@ class MyDataset(Dataset):
         pw2 = np.dot(-(R2.T), T2)
         r1, theta1, phi1 = self.cart2sph(pw1[0] - origin[0], pw1[1] - origin[1], pw1[2] - origin[2])
         r2, theta2, phi2 = self.cart2sph(pw2[0] - origin[0], pw2[1] - origin[1], pw2[2] - origin[2])
-        theta = theta2 - theta1
-        phi = phi2 - phi1
-        r = r2 - r1
+        theta = theta1 - theta2
+        phi = (phi1 - phi2)% (2 * math.pi)
+        r = r1 - r2
         sin_phi = math.sin(phi)
         cos_phi = math.cos(phi)
         return theta, sin_phi, cos_phi, r
@@ -227,29 +225,115 @@ class MyDataset(Dataset):
         else:
             origin = np.zeros(3)
         return origin
+#train_data=MyDataset("../co3d-main/dataset","train",512,12,False)
+class ObjaverseDataset(Dataset):
+    def __init__(self,path,pairs):
+        self.path=path
+        self.pairs=pairs
+        self.imgs=[]
+        #self.img_cam={}
+        for i in range(120):
+            self.imgs.append(self.path+"/"+str(i).zfill(3)+".png")
+            #self.img_cam[self.path+"/"+str(i).zfill(3)+".png"]=self.path+"/"+str(i).zfill(3)+".npy"
+    def __getitem__(self,index):
+        img_pair=random.sample(self.imgs,2)
+        #img_pair=["./8476c4170df24cf5bbe6967222d1a42d/000.png","./8476c4170df24cf5bbe6967222d1a42d/001.png"]
+        print(img_pair[0],img_pair[1])
+        pose1=np.load(img_pair[0].replace("png","npy"))
+        pose2=np.load(img_pair[1].replace("png","npy"))
+        img1=read_image(img_pair[0],ImageReadMode.RGB)
+        #print(img1)
+        img1=img1.permute(1,2,0)
+        img1[img1[:,:,-1]<=1]=255
+        img1=img1/255.0
+        #print(img1.shape)
+        img1=img1*2.0-1.0
+        #torchvision.utils.save_image(img1/255.0,"./0.jpg")
+        img2=read_image(img_pair[1],ImageReadMode.RGB)
+        img2=img2.permute(1,2,0)
+        img2[img2[:,:,-1]<=1]=255
+        img2=img2/255.0
+        #print(img1.shape)
+        img2=img2*2.0-1.0
+        #print(img1.shape)
+        #print(img2.shape)
+        #print("\n\n\n\n")
+        text="http://staircon.com/ <br>Export by <b>Alan Grice Staircase Co. Ltd</b> (lic 6391)"
+        R1=pose1[:,:3]
+        T1=pose1[:,3]
+        R2=pose2[:,:3]
+        T2=pose2[:,3]
+        relative=self.relative_pose(R1,T1,R2,T2)
+        relative=torch.tensor(relative)
+        relative = relative.view(-1)
+        return dict(
+            jpg=img1,
+            txt=text,
+            hint=img2,
+            view_linear=relative
+        )
 
-
-# train_data=MyDataset("../co3d-main/dataset","train",512,12,False)
-train_data = MyDataset("../co3d-main/dataset", "train", 512, 120, False, "add_zero", "car")
-train_loader = DataLoader(train_data, batch_size=6, shuffle=True)
+    def __len__(self):
+        return self.pairs
+    #pose2-pose1
+    def relative_pose(self,R1,T1,R2,T2):
+        pw1=np.dot(-(R1.T),T1)
+        pw2=np.dot(-(R2.T),T2)
+        r1,theta1,phi1=self.cart2sph(pw1[0],pw1[1],pw1[2])
+        r2,theta2,phi2=self.cart2sph(pw2[0],pw2[1],pw2[2])
+        theta=theta1-theta2
+        phi = (phi1 - phi2)% (2 * math.pi)
+        r=r1-r2
+        sin_phi=math.sin(phi)
+        cos_phi=math.cos(phi)
+        return theta,sin_phi,cos_phi,r
+    
+    def cart2sph(self,x,y,z):
+        r=math.sqrt(x**2+y**2+z**2)
+        theta=math.acos(z/r)
+        phi=math.atan(y/x)
+        return r,theta,phi
+'''
+train_data=MyDataset("../co3d-main/dataset","train",512,120,False,"add_zero")
+train_loader=DataLoader(train_data,batch_size=6,shuffle=True)
 for result in train_loader:
     # print(result)
     print(result["jpg"].shape)
     print(result["txt"])
     print(result["hint"].shape)
     print(result["view_linear"])
-    # sys.exit(0)
-    # continue
-# print(train_data[0])
-# print(train_data[0][0])
-# plt.imshow(train_data[0][0].permute(1,2,0))
-# plt.show()
-# train_loader=DataLoader(train_data,batch_size=1,shuffle=False)
-# img,pose=next(iter(train_loader))
-# print(img)
-# print(pose)
-# print(train_loader)
-# for img,pose in train_loader:
-# print(img)
-# print(pose)
+    #sys.exit(0)
+    #continue
+'''
+data=ObjaverseDataset("./8476c4170df24cf5bbe6967222d1a42d",1)
+loader=DataLoader(data,batch_size=1,shuffle=True)
+for result in loader:
+    #print(result)
+    print(result["jpg"].shape)
+    #print(result['jpg'])
+    #print(result["jpg"][0][256][256])
+    #print(result["jpg"][0][256][256]/255.0)
+    #print(result["txt"])
+    print(result["hint"].shape)
+    #print(result["hint"][0][256][256])
+    #print(result["hint"][0][256][256]/255.0)
+    #print(result['hint'])
+    print(result["view_linear"])
+    #torchvision.utils.save_image(result["jpg"].squeeze().permute(2,0,1),"./myLoader/0.png")
+    #torchvision.utils.save_image(result["hint"].squeeze().permute(2,0,1),"./myLoader/1.png")
+    #torchvision.utils.save_image(result["hint"],"./1.jpg")
+    #sys.exit(0)
+    #continue
+#print(train_data[0])
+#print(train_data[0][0])
+#plt.imshow(train_data[0][0].permute(1,2,0))
+#plt.show()
+#train_loader=DataLoader(train_data,batch_size=1,shuffle=False)
+#img,pose=next(iter(train_loader))
+#print(img)
+#print(pose)
+#print(train_loader)
+#for img,pose in train_loader:
+    #print(img)
+    #print(pose)
 
