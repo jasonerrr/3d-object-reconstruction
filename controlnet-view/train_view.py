@@ -9,12 +9,12 @@ from cldm.logger import ImageLogger
 from cldm.model import create_model, load_state_dict
 
 shutil.rmtree('image_log')
-shutil.rmtree('lightning_logs')
+# shutil.rmtree('lightning_logs')
 
 # Configs
 resume_path = './models/control_sd21_view_ini.ckpt'
 batch_size = 4
-logger_freq = 100
+logger_freq = 1000
 learning_rate = 1e-5
 sd_locked = True
 only_mid_control = False
@@ -35,10 +35,10 @@ dataset = MyDataset(
     resolution=512,
     pairs=100,
     full_dataset=False,
-    transform="add_zero",
+    transform="center_crop",
     kind="car"
 )
-dataloader = DataLoader(dataset, num_workers=0, batch_size=batch_size, shuffle=False)
+dataloader = DataLoader(dataset, num_workers=0, batch_size=batch_size, shuffle=True)
 logger = ImageLogger(batch_frequency=logger_freq)
 trainer = pl.Trainer(gpus=1, precision=32, callbacks=[logger], max_epochs=10000)
 
