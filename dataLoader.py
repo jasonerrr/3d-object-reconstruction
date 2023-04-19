@@ -227,38 +227,52 @@ class MyDataset(Dataset):
         return origin
 #train_data=MyDataset("../co3d-main/dataset","train",512,12,False)
 class ObjaverseDataset(Dataset):
-    def __init__(self,path,pairs):
+    def __init__(self,path,pairs,zero123):
         self.path=path
         self.pairs=pairs
-        self.imgs=[]
+        self.zero123=zero123
+        self.dirs=os.listdir(self.path)
         #self.img_cam={}
+        '''
         for i in range(120):
             self.imgs.append(self.path+"/"+str(i).zfill(3)+".png")
+        '''
             #self.img_cam[self.path+"/"+str(i).zfill(3)+".png"]=self.path+"/"+str(i).zfill(3)+".npy"
     def __getitem__(self,index):
-        img_pair=random.sample(self.imgs,2)
+        dir=self.path+"/"+random.choice(self.dirs)
+        img_pair=random.sample(range(12),2)
         #img_pair=["./8476c4170df24cf5bbe6967222d1a42d/000.png","./8476c4170df24cf5bbe6967222d1a42d/001.png"]
-        print(img_pair[0],img_pair[1])
-        pose1=np.load(img_pair[0].replace("png","npy"))
-        pose2=np.load(img_pair[1].replace("png","npy"))
-        img1=read_image(img_pair[0],ImageReadMode.RGB)
+        #print(img_pair[0],img_pair[1])
+        img1_path=dir+"/"+str(img_pair[0]).zfill(3)+".png"
+        img2_path=dir+"/"+str(img_pair[1]).zfill(3)+".png"
+        print(img1_path)
+        print(img2_path)
+        pose1=np.load(img1_path.replace("png","npy"))
+        pose2=np.load(img2_path.replace("png","npy"))
+        img1=read_image(img1_path,ImageReadMode.RGB)
         #print(img1)
         img1=img1.permute(1,2,0)
-        img1[img1[:,:,-1]<=1]=255
-        img1=img1/255.0
-        #print(img1.shape)
-        img1=img1*2.0-1.0
+        if(self.zero123):
+            img1[img1[:,:,-1]<=1]=255
+            img1=img1/255.0
+            #print(img1.shape)
+            img1=img1*2.0-1.0
+        else:
+            img1=img1/255.0
         #torchvision.utils.save_image(img1/255.0,"./0.jpg")
-        img2=read_image(img_pair[1],ImageReadMode.RGB)
+        img2=read_image(img2_path,ImageReadMode.RGB)
         img2=img2.permute(1,2,0)
-        img2[img2[:,:,-1]<=1]=255
-        img2=img2/255.0
-        #print(img1.shape)
-        img2=img2*2.0-1.0
+        if(self.zero123):
+            img2[img2[:,:,-1]<=1]=255
+            img2=img2/255.0
+            #print(img1.shape)
+            img2=img2*2.0-1.0
+        else:
+            img2=img2/255.0
         #print(img1.shape)
         #print(img2.shape)
         #print("\n\n\n\n")
-        text="http://staircon.com/ <br>Export by <b>Alan Grice Staircase Co. Ltd</b> (lic 6391)"
+        text="An image"
         R1=pose1[:,:3]
         T1=pose1[:,3]
         R2=pose2[:,:3]
@@ -305,7 +319,7 @@ for result in train_loader:
     #sys.exit(0)
     #continue
 '''
-data=ObjaverseDataset("./8476c4170df24cf5bbe6967222d1a42d",1)
+data=ObjaverseDataset("/data2/yanxudong/yxd/views/views_release",1,True)
 loader=DataLoader(data,batch_size=1,shuffle=True)
 for result in loader:
     #print(result)
@@ -319,8 +333,8 @@ for result in loader:
     #print(result["hint"][0][256][256]/255.0)
     #print(result['hint'])
     print(result["view_linear"])
-    #torchvision.utils.save_image(result["jpg"].squeeze().permute(2,0,1),"./myLoader/0.png")
-    #torchvision.utils.save_image(result["hint"].squeeze().permute(2,0,1),"./myLoader/1.png")
+    torchvision.utils.save_image(result["jpg"].squeeze().permute(2,0,1),"./myLoader/0.png")
+    torchvision.utils.save_image(result["hint"].squeeze().permute(2,0,1),"./myLoader/1.png")
     #torchvision.utils.save_image(result["hint"],"./1.jpg")
     #sys.exit(0)
     #continue
