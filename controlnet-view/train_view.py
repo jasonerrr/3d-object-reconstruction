@@ -14,7 +14,7 @@ shutil.rmtree('image_log')
 # Configs
 resume_path = './models/control_sd21_view_ini.ckpt'
 batch_size = 4
-logger_freq = 100
+logger_freq = 1000
 learning_rate = 1e-5
 sd_locked = True
 only_mid_control = False
