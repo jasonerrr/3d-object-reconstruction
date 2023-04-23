@@ -14,3 +14,8 @@ print('T.shape', T.shape)
 
 linear = torch.nn.Linear(772, 768)
 # print(linear(T))
+
+for i in range(1000):
+    r = torch.rand(size=(1,))
+    print(r, r < 0.1, (r < 0.1).item())
+
