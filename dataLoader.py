@@ -125,6 +125,9 @@ class MyDataset(Dataset):
         # print(text)
         # print(type(text))
         # return img1,mask1,img2,mask2,relative,text
+        img1=img1/255.0
+        img1=img1*2.0-1.0
+        img2=img2/255.0
         return dict(
             jpg=img1.permute(1, 2, 0),
             txt=text,
@@ -307,17 +310,20 @@ class ObjaverseDataset(Dataset):
         theta=math.acos(z/r)
         phi=math.atan(y/x)
         return r,theta,phi
-'''
-train_data=MyDataset("../co3d-main/dataset","train",512,120,False,"add_zero")
+
+train_data=MyDataset("../co3d-main/dataset","train",512,100,False,"center_crop","car")
 train_loader=DataLoader(train_data,batch_size=6,shuffle=True)
 for result in train_loader:
     # print(result)
     print(result["jpg"].shape)
+    print(result["jpg"][0][256][256])
     print(result["txt"])
     print(result["hint"].shape)
+    print(result["hint"][0][256][256])
     print(result["view_linear"])
     #sys.exit(0)
     #continue
+
 '''
 data=ObjaverseDataset("/data2/yanxudong/yxd/views/views_release",1,True)
 loader=DataLoader(data,batch_size=1,shuffle=True)
@@ -350,4 +356,5 @@ for result in loader:
 #for img,pose in train_loader:
     #print(img)
     #print(pose)
+'''
 

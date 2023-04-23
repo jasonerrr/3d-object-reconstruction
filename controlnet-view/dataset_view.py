@@ -20,7 +20,7 @@ import sys
 from plyfile import PlyData
 import pandas as pd
 # print(sys.path)
-from blip.demo import blip_run
+#from blip.demo import blip_run
 
 
 # from models.blip import blip_decoder
