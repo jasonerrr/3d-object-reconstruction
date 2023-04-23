@@ -22,7 +22,7 @@ import pandas as pd
 class MyDataset(Dataset):
     # split in ["train","val","test"]
     # transform in ["add_zero","center_crop"]
-    def __init__(self, path, split, resolution, pairs, full_dataset, transform, kind=""):
+    def __init__(self, path, split, resolution, pairs, full_dataset, transform, kind="",dropout=0):
         self.path = path
         self.resolution = resolution
         self.sequence = []
@@ -32,6 +32,7 @@ class MyDataset(Dataset):
         self.transform = transform
         self.full_dataset = full_dataset
         self.pairs = pairs
+        self.dropout=dropout
         # key:sequence_path
         # value:[[img1_path,img2_path,...],text]
         self.sequence_imgs = {}
@@ -119,8 +120,12 @@ class MyDataset(Dataset):
             # print(img2)
             # torchvision.utils.save_image(img1/255.0,"./1.png")
             # torchvision.utils.save_image(img2/255.0,"./2.png")
-        relative = self.relative_pose(pose1[0].numpy(), pose1[1].numpy(), pose2[0].numpy(), pose2[1].numpy(), origin)
-        relative = torch.tensor(relative)
+        drop=random.random()
+        if(drop<self.dropout):
+            relative=torch.zeros(4)
+        else:
+            relative = self.relative_pose(pose1[0].numpy(), pose1[1].numpy(), pose2[0].numpy(), pose2[1].numpy(), origin)
+            relative = torch.tensor(relative)
         relative = relative.view(-1)
         # print(text)
         # print(type(text))
@@ -311,8 +316,8 @@ class ObjaverseDataset(Dataset):
         phi=math.atan(y/x)
         return r,theta,phi
 
-train_data=MyDataset("../co3d-main/dataset","train",512,100,False,"center_crop","car")
-train_loader=DataLoader(train_data,batch_size=6,shuffle=True)
+train_data=MyDataset("../co3d-main/dataset","train",512,100,False,"center_crop","car",0.1)
+train_loader=DataLoader(train_data,batch_size=6,shuffle=True,num_workers=4)
 for result in train_loader:
     # print(result)
     print(result["jpg"].shape)
