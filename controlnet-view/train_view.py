@@ -12,7 +12,7 @@ shutil.rmtree('image_log')
 # shutil.rmtree('lightning_logs')
 
 # Configs
-resume_path = '/data2/yanxudong/liuruizhe/controlnet-test/ControlNet-main0/models/control_sd21_view_ini.ckpt'
+resume_path = './models/control_sd21_view_ini.ckpt'
 batch_size = 4
 logger_freq = 1000
 learning_rate = 1e-5
@@ -36,9 +36,10 @@ dataset = MyDataset(
     pairs=100,
     full_dataset=False,
     transform="center_crop",
-    kind="car"
+    kind="car",
+    dropout=0.1
 )
-dataloader = DataLoader(dataset, num_workers=0, batch_size=batch_size, shuffle=True)
+dataloader = DataLoader(dataset, num_workers=4, batch_size=batch_size, shuffle=True)
 logger = ImageLogger(batch_frequency=logger_freq)
 trainer = pl.Trainer(gpus=1, precision=32, callbacks=[logger], max_epochs=10000)
 

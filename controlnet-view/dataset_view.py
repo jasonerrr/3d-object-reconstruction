@@ -2,7 +2,7 @@ import sys
 sys.path.append(r'/DATA/disk1/cihai/lrz/3d-object-reconstruction')
 
 from torch.utils.data import Dataset, DataLoader
-from torchvision.io import read_image
+from torchvision.io import read_image, ImageReadMode
 import torchvision
 import random
 import torch
@@ -19,15 +19,15 @@ import albumentations as A
 import sys
 from plyfile import PlyData
 import pandas as pd
+
+
 # print(sys.path)
-#from blip.demo import blip_run
-
-
+# from blip.demo import blip_run
 # from models.blip import blip_decoder
 class MyDataset(Dataset):
     # split in ["train","val","test"]
     # transform in ["add_zero","center_crop"]
-    def __init__(self, path, split, resolution, pairs, full_dataset, transform, kind=""):
+    def __init__(self, path, split, resolution, pairs, full_dataset, transform, kind="", dropout=0.0):
         self.path = path
         self.resolution = resolution
         self.sequence = []
@@ -37,6 +37,7 @@ class MyDataset(Dataset):
         self.transform = transform
         self.full_dataset = full_dataset
         self.pairs = pairs
+        self.dropout = dropout
         # key:sequence_path
         # value:[[img1_path,img2_path,...],text]
         self.sequence_imgs = {}
@@ -124,15 +125,23 @@ class MyDataset(Dataset):
             # print(img2)
             # torchvision.utils.save_image(img1/255.0,"./1.png")
             # torchvision.utils.save_image(img2/255.0,"./2.png")
-        relative = self.relative_pose(pose1[0].numpy(), pose1[1].numpy(), pose2[0].numpy(), pose2[1].numpy(), origin)
-        relative = torch.tensor(relative)
+        drop = random.random()
+        if (drop < self.dropout):
+            relative = torch.zeros(4)
+        else:
+            relative = self.relative_pose(pose1[0].numpy(), pose1[1].numpy(), pose2[0].numpy(), pose2[1].numpy(),
+                                          origin)
+            relative = torch.tensor(relative)
         relative = relative.view(-1)
         # print(text)
         # print(type(text))
         # return img1,mask1,img2,mask2,relative,text
+        img1 = img1 / 255.0
+        img1 = img1 * 2.0 - 1.0
+        img2 = img2 / 255.0
         return dict(
             jpg=img1.permute(1, 2, 0),
-            txt="An image",
+            txt=text,
             hint=img2.permute(1, 2, 0),
             view_linear=relative
         )
@@ -197,13 +206,13 @@ class MyDataset(Dataset):
 
     # pose2-pose1
     def relative_pose(self, R1, T1, R2, T2, origin):
-        pw1 = np.dot(-R1.T, T1)
-        pw2 = np.dot(-R2.T, T2)
+        pw1 = np.dot(-(R1.T), T1)
+        pw2 = np.dot(-(R2.T), T2)
         r1, theta1, phi1 = self.cart2sph(pw1[0] - origin[0], pw1[1] - origin[1], pw1[2] - origin[2])
         r2, theta2, phi2 = self.cart2sph(pw2[0] - origin[0], pw2[1] - origin[1], pw2[2] - origin[2])
-        theta = theta2 - theta1
-        phi = phi2 - phi1
-        r = r2 - r1
+        theta = theta1 - theta2
+        phi = (phi1 - phi2) % (2 * math.pi)
+        r = r1 - r2
         sin_phi = math.sin(phi)
         cos_phi = math.cos(phi)
         return theta, sin_phi, cos_phi, r
@@ -233,14 +242,102 @@ class MyDataset(Dataset):
 
 
 # train_data=MyDataset("../co3d-main/dataset","train",512,12,False)
+class ObjaverseDataset(Dataset):
+    def __init__(self, path, pairs, zero123):
+        self.path = path
+        self.pairs = pairs
+        self.zero123 = zero123
+        self.dirs = os.listdir(self.path)
+        # self.img_cam={}
+        '''
+        for i in range(120):
+            self.imgs.append(self.path+"/"+str(i).zfill(3)+".png")
+        '''
+        # self.img_cam[self.path+"/"+str(i).zfill(3)+".png"]=self.path+"/"+str(i).zfill(3)+".npy"
+
+    def __getitem__(self, index):
+        dir = self.path + "/" + random.choice(self.dirs)
+        img_pair = random.sample(range(12), 2)
+        # img_pair=["./8476c4170df24cf5bbe6967222d1a42d/000.png","./8476c4170df24cf5bbe6967222d1a42d/001.png"]
+        # print(img_pair[0],img_pair[1])
+        img1_path = dir + "/" + str(img_pair[0]).zfill(3) + ".png"
+        img2_path = dir + "/" + str(img_pair[1]).zfill(3) + ".png"
+        print(img1_path)
+        print(img2_path)
+        pose1 = np.load(img1_path.replace("png", "npy"))
+        pose2 = np.load(img2_path.replace("png", "npy"))
+        img1 = read_image(img1_path, ImageReadMode.RGB)
+        # print(img1)
+        img1 = img1.permute(1, 2, 0)
+        if (self.zero123):
+            img1[img1[:, :, -1] <= 1] = 255
+            img1 = img1 / 255.0
+            # print(img1.shape)
+            img1 = img1 * 2.0 - 1.0
+        else:
+            img1 = img1 / 255.0
+        # torchvision.utils.save_image(img1/255.0,"./0.jpg")
+        img2 = read_image(img2_path, ImageReadMode.RGB)
+        img2 = img2.permute(1, 2, 0)
+        if (self.zero123):
+            img2[img2[:, :, -1] <= 1] = 255
+            img2 = img2 / 255.0
+            # print(img1.shape)
+            img2 = img2 * 2.0 - 1.0
+        else:
+            img2 = img2 / 255.0
+        # print(img1.shape)
+        # print(img2.shape)
+        # print("\n\n\n\n")
+        text = "An image"
+        R1 = pose1[:, :3]
+        T1 = pose1[:, 3]
+        R2 = pose2[:, :3]
+        T2 = pose2[:, 3]
+        relative = self.relative_pose(R1, T1, R2, T2)
+        relative = torch.tensor(relative)
+        relative = relative.view(-1)
+        return dict(
+            jpg=img1,
+            txt=text,
+            hint=img2,
+            view_linear=relative
+        )
+
+    def __len__(self):
+        return self.pairs
+
+    # pose2-pose1
+    def relative_pose(self, R1, T1, R2, T2):
+        pw1 = np.dot(-(R1.T), T1)
+        pw2 = np.dot(-(R2.T), T2)
+        r1, theta1, phi1 = self.cart2sph(pw1[0], pw1[1], pw1[2])
+        r2, theta2, phi2 = self.cart2sph(pw2[0], pw2[1], pw2[2])
+        theta = theta1 - theta2
+        phi = (phi1 - phi2) % (2 * math.pi)
+        r = r1 - r2
+        sin_phi = math.sin(phi)
+        cos_phi = math.cos(phi)
+        return theta, sin_phi, cos_phi, r
+
+    def cart2sph(self, x, y, z):
+        r = math.sqrt(x ** 2 + y ** 2 + z ** 2)
+        theta = math.acos(z / r)
+        phi = math.atan(y / x)
+        return r, theta, phi
+
+
+# train_data=MyDataset("../co3d-main/dataset","train",512,12,False)
 if __name__ == '__main__':
-    train_data = MyDataset("../../../dataset/co3d", "train", 512, 120, False, "add_zero", "car")
-    train_loader = DataLoader(train_data, batch_size=6, shuffle=True)
+    train_data = MyDataset("../../../yxd/dataset/co3d", "train", 512, 100, False, "center_crop", "car", 0.1)
+    train_loader = DataLoader(train_data, batch_size=6, shuffle=True, num_workers=4)
     for result in train_loader:
-    # print(result)
+        # print(result)
         print(result["jpg"].shape)
+        print(result["jpg"][0][256][256])
         print(result["txt"])
         print(result["hint"].shape)
+        print(result["hint"][0][256][256])
         print(result["view_linear"])
     # sys.exit(0)
     # continue
