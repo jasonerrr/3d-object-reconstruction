@@ -14,7 +14,7 @@ shutil.rmtree('image_log')
 
 # Configs
 resume_path = './models/control_sd21_view_ini.ckpt'
-batch_size = 4
+batch_size = 6
 logger_freq = 1000
 learning_rate = 1e-5
 sd_locked = True
@@ -24,7 +24,7 @@ checkpoint_callback = ModelCheckpoint(
     dirpath='model_checkpoint',
     filename='cldm-view-{epoch}',
     save_last=True,
-    every_n_epochs=500
+    every_n_epochs=40
 )
 
 
