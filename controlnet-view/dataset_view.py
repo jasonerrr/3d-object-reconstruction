@@ -22,7 +22,13 @@ import pandas as pd
 
 
 # print(sys.path)
+<<<<<<< HEAD
 # from blip.demo import blip_run
+=======
+from blip.demo import blip_run
+
+
+>>>>>>> 606a463d18baed0e8b5f884ff2eae51ac3b6935b
 # from models.blip import blip_decoder
 class MyDataset(Dataset):
     # split in ["train","val","test"]
