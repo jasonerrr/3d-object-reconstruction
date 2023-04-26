@@ -21,8 +21,6 @@ model:
     use_ema: False
     only_mid_control: False
 
-    use_clip_hint: True
-
     use_linear_view_cond: True
     linear_view_dim: 4
     linear_n_freq: 6

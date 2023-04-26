@@ -52,10 +52,12 @@ for k in scratch_dict.keys():
         target_dict[k] = scratch_dict[k].clone()
         print(f'These weights are newly added: {k}')
 
+'''
 print("try to find how to find branch")
 for module in model.control_model.input_blocks:
     print(module)
 print("try to find how to find branch done")
+'''
 
 model.load_state_dict(target_dict, strict=True)
 torch.save(model.state_dict(), output_path)
