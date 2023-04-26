@@ -2,6 +2,7 @@ from share import *
 import shutil
 
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader
 
 from dataset_view import MyDataset
@@ -18,6 +19,13 @@ logger_freq = 1000
 learning_rate = 1e-5
 sd_locked = True
 only_mid_control = False
+
+checkpoint_callback = ModelCheckpoint(
+    dirpath='model_checkpoint',
+    filename='cldm-view-{epoch}',
+    save_last=True,
+    every_n_epochs=500
+)
 
 
 # First use cpu to load models. Pytorch Lightning will automatically move it to GPUs.
@@ -41,7 +49,7 @@ dataset = MyDataset(
 )
 dataloader = DataLoader(dataset, num_workers=4, batch_size=batch_size, shuffle=True)
 logger = ImageLogger(batch_frequency=logger_freq)
-trainer = pl.Trainer(gpus=1, precision=32, callbacks=[logger], max_epochs=10000)
+trainer = pl.Trainer(gpus=1, precision=32, callbacks=[logger, checkpoint_callback], max_epochs=10000)
 
 
 # Train!
