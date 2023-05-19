@@ -1,4 +1,6 @@
 from share import *
+import sys
+sys.path.append(r'/DATA/disk1/cihai/lrz/3d-object-reconstruction/controlnet-view')
 import shutil
 
 import pytorch_lightning as pl
@@ -9,22 +11,20 @@ from dataset_view import MyDataset
 from cldm.logger import ImageLogger
 from cldm.model import create_model, load_state_dict
 
-shutil.rmtree('image_log')
-# shutil.rmtree('lightning_logs')
+shutil.rmtree('image_log/train')
 
 # Configs
 resume_path = './models/control_sd21_view_ini.ckpt'
 batch_size = 6
 logger_freq = 1000
-learning_rate = 1e-5
+learning_rate = 1e-4
 sd_locked = True
 only_mid_control = False
 
 checkpoint_callback = ModelCheckpoint(
-    dirpath='model_checkpoint',
-    filename='cldm-view-{epoch}',
+    dirpath='model_checkpoint_7',
     save_last=True,
-    every_n_epochs=40
+    every_n_epochs=1
 )
 
 
@@ -41,7 +41,7 @@ dataset = MyDataset(
     path="../../../yxd/dataset/co3d",
     split="train",
     resolution=512,
-    pairs=100,
+    pairs=19200,
     full_dataset=False,
     transform="center_crop",
     kind="car",
@@ -49,7 +49,7 @@ dataset = MyDataset(
 )
 dataloader = DataLoader(dataset, num_workers=4, batch_size=batch_size, shuffle=True)
 logger = ImageLogger(batch_frequency=logger_freq)
-trainer = pl.Trainer(gpus=1, precision=32, callbacks=[logger, checkpoint_callback], max_epochs=10000)
+trainer = pl.Trainer(gpus=1, precision=32, accumulate_grad_batches=192, callbacks=[logger, checkpoint_callback], max_epochs=10000)
 
 
 # Train!

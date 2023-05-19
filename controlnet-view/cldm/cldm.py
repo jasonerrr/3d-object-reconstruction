@@ -1,6 +1,7 @@
 import sys
 sys.path.append(r'/DATA/disk1/cihai/lrz/3d-object-reconstruction/controlnet-view')
 
+import math
 import einops
 import torch
 import torch as th
@@ -349,44 +350,17 @@ class ControlLDM(LatentDiffusion):
             assert linear_n_freq is not None
 
             self.linear_view_dim = linear_view_dim
-            self.linear_view_channels = 2 * linear_n_freq + 1
-            self.linear_view_encoding = FreqEncoder_torch(
+
+            self.linear_input_enc = FreqEncoder_torch(
                 input_dim=linear_view_dim,
-                max_freq_log2=(linear_n_freq - 1),
-                N_freqs=linear_n_freq
+                max_freq_log2=6,
+                N_freqs=7
             )
 
             self.linear_input_view_blocks = nn.Sequential(
-                # nn.LayerNorm(2 * linear_n_freq + 1),
-                linear(2 * linear_n_freq + 1, self.control_model.context_dim),
-                BasicTransformerBlock(
-                    dim=self.control_model.context_dim,
-                    n_heads=8, d_head=128,
-                    dropout=0.0,
-                    context_dim=self.control_model.context_dim,
-                    gated_ff=True,
-                    checkpoint=False,
-                    disable_self_attn=False
-                ),
-                BasicTransformerBlock(
-                    dim=self.control_model.context_dim,
-                    n_heads=8, d_head=128,
-                    dropout=0.0,
-                    context_dim=self.control_model.context_dim,
-                    gated_ff=True,
-                    checkpoint=False,
-                    disable_self_attn=False
-                ),
-                BasicTransformerBlock(
-                    dim=self.control_model.context_dim,
-                    n_heads=8, d_head=128,
-                    dropout=0.0,
-                    context_dim=self.control_model.context_dim,
-                    gated_ff=True,
-                    checkpoint=False,
-                    disable_self_attn=False
-                ),
-                nn.LayerNorm(self.control_model.context_dim)
+                linear(linear_view_dim * 15, self.control_model.context_dim * 4),
+                nn.SiLU(),
+                linear(self.control_model.context_dim * 4, self.control_model.context_dim * 4),
             )
 
     def get_clip_embedding(self, control):
@@ -404,12 +378,21 @@ class ControlLDM(LatentDiffusion):
         return hint_clip_embedding_ctrl, hint_clip_embedding_diff
 
     def get_view_linear(self, view_linear, hint_clip_embedding_diff):
-        guided_view_linear \
-            = self.linear_view_encoding(view_linear).view(-1, self.linear_view_channels, self.linear_view_dim).permute(0, 2, 1)
-        guided_view_linear = self.linear_input_view_blocks[0](guided_view_linear)
-        for i_layer in range(1, 4, 1):
-            guided_view_linear = self.linear_input_view_blocks[i_layer](guided_view_linear, hint_clip_embedding_diff)
-        guided_view_linear = self.linear_input_view_blocks[-1](guided_view_linear)
+        # guided_view_linear \
+        #     = self.linear_view_encoding(view_linear).view(-1, self.linear_view_channels, self.linear_view_dim).permute(0, 2, 1)
+        # print(guided_view_linear.shape)
+
+        # guided_view_linear = self.linear_input_view_blocks[0](guided_view_linear)
+        # for i_layer in range(1, 2, 1):
+        #     guided_view_linear = self.linear_input_view_blocks[i_layer](guided_view_linear, hint_clip_embedding_diff)
+        # guided_view_linear = self.linear_input_view_blocks[-1](guided_view_linear)
+        view_linear_enc = self.linear_input_enc(view_linear)
+        guided_view_linear = self.linear_input_view_blocks(view_linear_enc)
+        # print('guided_view_linear shape:', guided_view_linear.shape)
+        # guided_view_linear = guided_view_linear.unsqueeze(dim=1)
+        guided_view_linear = guided_view_linear.view(-1, 4, self.control_model.context_dim)
+        # print('unsqueezed guided_view_linear shape:', guided_view_linear.shape)
+        guided_view_linear = torch.nn.functional.normalize(guided_view_linear, p=2, dim=-1)
         return guided_view_linear
 
     # @torch.no_grad()
@@ -430,24 +413,18 @@ class ControlLDM(LatentDiffusion):
             control = control.to(memory_format=torch.contiguous_format).float()
             view_linear = view_linear.to(memory_format=torch.contiguous_format).float()
 
-        # hint_clip_embedding = None
-        guided_view_linear = None
-        hint_clip_embedding_ctrl, hint_clip_embedding_diff = self.get_clip_embedding(control)
-        # print('hint_clip_embedding_ctrl shape:', hint_clip_embedding_ctrl.shape)
-        # print('hint_clip_embedding_diff shape:', hint_clip_embedding_diff.shape)
+            guided_view_linear = None
+            hint_clip_embedding_ctrl, hint_clip_embedding_diff = self.get_clip_embedding(control)
+            # print('hint_clip_embedding_ctrl shape:', hint_clip_embedding_ctrl.shape)
+            # print('hint_clip_embedding_diff shape:', hint_clip_embedding_diff.shape)
 
         if self.use_linear_view_cond is True:
             guided_view_linear = self.get_view_linear(view_linear, hint_clip_embedding_diff)
             # print('guided_view_linear:', guided_view_linear.shape)
 
-        # c_ctrl = torch.cat([hint_clip_embedding_ctrl, guided_view_linear], dim=1)
-        # c_diff = hint_clip_embedding_diff
-
         return x, dict(
-            # c_crossattn_ctrl=[c_ctrl],
-            c_crossattn_ctrl=[hint_clip_embedding_diff, guided_view_linear],
-            # c_crossattn_diff=[c_diff],
-            c_crossattn_diff=[hint_clip_embedding_diff, guided_view_linear],
+            c_crossattn_ctrl=[guided_view_linear],
+            c_crossattn_diff=[hint_clip_embedding_diff],
             c_concat=[control],
             uc_view=self.get_unconditional_view_linear(view_linear, hint_clip_embedding_diff)
         )
@@ -483,6 +460,7 @@ class ControlLDM(LatentDiffusion):
                 control=control,
                 only_mid_control=self.only_mid_control
             )
+
         return eps
 
     @torch.no_grad()
@@ -497,18 +475,25 @@ class ControlLDM(LatentDiffusion):
     def log_images(self, batch, N=4, n_row=2, sample=False, ddim_steps=50, ddim_eta=0.0, return_keys=None,
                    quantize_denoised=True, inpaint=True, plot_denoise_rows=False, plot_progressive_rows=True,
                    plot_diffusion_rows=False, unconditional_guidance_scale=9.0, unconditional_guidance_label=None,
-                   use_ema_scope=True,
+                   use_ema_scope=True, use_x_T=False,
                    **kwargs):
         use_ddim = ddim_steps is not None
 
         log = dict()
         z, c = self.get_input(batch, self.first_stage_key, bs=N)
         c_cat = c["c_concat"][0][:N]
-        hint_clip_embedding_ctrl, guided_view_linear = c["c_crossattn_ctrl"][0][:N], c["c_crossattn_ctrl"][1][:N]
+        # hint_clip_embedding_ctrl, guided_view_linear = c["c_crossattn_ctrl"][0][:N], c["c_crossattn_ctrl"][1][:N]
+        guided_view_linear = c["c_crossattn_ctrl"][0][:N]
         hint_clip_embedding_diff = c["c_crossattn_diff"][0][:N]
         uc_view = c["uc_view"]
         N = min(z.shape[0], N)
         n_row = min(z.shape[0], n_row)
+
+        x_T_posterior = self.encode_first_stage(c["c_concat"][0][:N])
+        x_T = self.get_first_stage_encoding(x_T_posterior)
+        noise_T = torch.randn_like(x_T)
+        alpha_T = 0.999 * 0.999
+        x_T = math.sqrt(alpha_T) * noise_T + math.sqrt(1.0 - alpha_T) * x_T
 
         log["target_view"] = (batch["jpg"].float()).permute(0, 3, 1, 2)
         log["hint_view"] = (batch["hint"].float()).permute(0, 3, 1, 2)
@@ -540,12 +525,12 @@ class ControlLDM(LatentDiffusion):
             samples, z_denoise_row = self.sample_log(
                 cond={
                     "c_concat": [c_cat],
-                    "c_crossattn_ctrl": [hint_clip_embedding_ctrl, guided_view_linear],
+                    "c_crossattn_ctrl": [guided_view_linear],
                     "c_crossattn_diff": [hint_clip_embedding_diff]
                 },
                 batch_size=N,
                 ddim=use_ddim,
-                ddim_steps=ddim_steps,
+                ddim_steps=ddim_steps, x_T=None,
                 eta=ddim_eta
             )
             x_samples = self.decode_first_stage(samples)
@@ -558,19 +543,20 @@ class ControlLDM(LatentDiffusion):
             # uc_cross = self.get_unconditional_conditioning(N)
             uc_full = {
                 "c_concat": [c_cat],
-                "c_crossattn_ctrl": [hint_clip_embedding_diff, uc_view],
-                "c_crossattn_diff": [hint_clip_embedding_diff, uc_view]
+                "c_crossattn_ctrl": [uc_view],
+                "c_crossattn_diff": [hint_clip_embedding_diff]
             }
             samples_cfg, _ = self.sample_log(
                 cond={
                     "c_concat": [c_cat],
-                    "c_crossattn_ctrl": [hint_clip_embedding_diff, guided_view_linear],
-                    "c_crossattn_diff": [hint_clip_embedding_diff, guided_view_linear]
+                    "c_crossattn_ctrl": [guided_view_linear],
+                    "c_crossattn_diff": [hint_clip_embedding_diff]
                 },
                 batch_size=N, ddim=use_ddim,
-                ddim_steps=ddim_steps, eta=ddim_eta,
+                ddim_steps=ddim_steps, x_T=x_T if use_x_T else None,
+                eta=ddim_eta,
                 unconditional_guidance_scale=unconditional_guidance_scale,
-                unconditional_conditioning=uc_full,
+                unconditional_conditioning=uc_full
             )
             x_samples_cfg = self.decode_first_stage(samples_cfg)
             log[f"samples_cfg_scale_{unconditional_guidance_scale:.2f}"] = x_samples_cfg
@@ -578,11 +564,11 @@ class ControlLDM(LatentDiffusion):
         return log
 
     @torch.no_grad()
-    def sample_log(self, cond, batch_size, ddim, ddim_steps, **kwargs):
+    def sample_log(self, cond, batch_size, ddim, ddim_steps, x_T=None, **kwargs):
         ddim_sampler = DDIMSampler(self)
         b, c, h, w = cond["c_concat"][0].shape
         shape = (self.channels, h // 8, w // 8)
-        samples, intermediates = ddim_sampler.sample(ddim_steps, batch_size, shape, cond, verbose=False, **kwargs)
+        samples, intermediates = ddim_sampler.sample(ddim_steps, batch_size, shape, cond, verbose=False, x_T=x_T, **kwargs)
         return samples, intermediates
 
     def configure_optimizers(self):

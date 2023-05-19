@@ -102,12 +102,22 @@ class MyDataset(Dataset):
         # print(img1_path)
         # print(img2_path)
         img1 = read_image(img1_path)
+        # print('just read in img1', img1)
         img2 = read_image(img2_path)
         pose1 = self.img_camera[img1_path]
         pose2 = self.img_camera[img2_path]
         origin = self.sequence_imgs[self.sequence[sequence_index]][1]
         # print(origin)
         text = self.sequence_imgs[self.sequence[sequence_index]][2]
+        '''
+        print(img1.shape, type(img1))
+
+        print(f'{index}, before')
+        for ii in range(img1.shape[0]):
+            for jj in range(img1.shape[1]):
+                for kk in range(img1.shape[2]):
+                    print(f'{ii},{jj},{kk}', img1[ii:ii + 1, jj:jj + 1, kk:kk + 1])
+        '''
         if (self.transform == "add_zero"):
             img1, mask1 = self.image_transform(img1)
             img2, mask2 = self.image_transform(img2)
@@ -124,7 +134,7 @@ class MyDataset(Dataset):
             # torchvision.utils.save_image(img2/255.0,"./2.png")
         drop = random.random()
         if (drop < self.dropout):
-            relative = torch.zeros(4)
+            relative = torch.zeros(3)
         else:
             relative = self.relative_pose(pose1[0].numpy(), pose1[1].numpy(), pose2[0].numpy(), pose2[1].numpy(),
                                           origin)
@@ -133,9 +143,27 @@ class MyDataset(Dataset):
         # print(text)
         # print(type(text))
         # return img1,mask1,img2,mask2,relative,text
+        '''
+        print(img1.shape, type(img1))
+
+        print(f'{index}, before')
+        for ii in range(img1.shape[0]):
+            for jj in range(img1.shape[1]):
+                for kk in range(img1.shape[2]):
+                    print(f'{ii},{jj},{kk}', img1[ii:ii + 1, jj:jj + 1, kk:kk + 1])
+        '''
+
         img1 = img1 / 255.0
+        '''
+        print(img1.shape)
+        for i in range(img1.shape[0]):
+            for j in range(img1.shape[1]):
+                for k in range(img1.shape[2]):
+                    print(img1[i, j, k])
+        '''
         img1 = img1 * 2.0 - 1.0
         img2 = img2 / 255.0
+        # print('view_linear:', relative)
         return dict(
             jpg=img1.permute(1, 2, 0),
             txt=text,
@@ -210,9 +238,9 @@ class MyDataset(Dataset):
         theta = theta1 - theta2
         phi = (phi1 - phi2) % (2 * math.pi)
         r = r1 - r2
-        sin_phi = math.sin(phi)
-        cos_phi = math.cos(phi)
-        return theta, sin_phi, cos_phi, r
+        # sin_phi = math.sin(phi)
+        # cos_phi = math.cos(phi)
+        return theta, phi, r
 
     def cart2sph(self, x, y, z):
         r = math.sqrt(x ** 2 + y ** 2 + z ** 2)
@@ -311,11 +339,11 @@ class ObjaverseDataset(Dataset):
         r1, theta1, phi1 = self.cart2sph(pw1[0], pw1[1], pw1[2])
         r2, theta2, phi2 = self.cart2sph(pw2[0], pw2[1], pw2[2])
         theta = theta1 - theta2
-        phi = (phi1 - phi2) % (2 * math.pi)
-        r = r1 - r2
-        sin_phi = math.sin(phi)
-        cos_phi = math.cos(phi)
-        return theta, sin_phi, cos_phi, r
+        phi = phi1 - phi2
+        r = r1 / r2
+        # sin_phi = math.sin(phi)
+        # cos_phi = math.cos(phi)
+        return theta, phi, r
 
     def cart2sph(self, x, y, z):
         r = math.sqrt(x ** 2 + y ** 2 + z ** 2)
