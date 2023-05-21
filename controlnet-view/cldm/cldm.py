@@ -16,6 +16,7 @@ from ldm.modules.diffusionmodules.util import (
 
 from einops import rearrange, repeat
 from torchvision.utils import make_grid
+from torch.optim.lr_scheduler import MultiStepLR
 from ldm.modules.attention import SpatialTransformer, BasicTransformerBlock
 from ldm.modules.diffusionmodules.openaimodel import UNetModel, TimestepEmbedSequential, ResBlock, Downsample, AttentionBlock
 from ldm.models.diffusion.ddpm import LatentDiffusion
@@ -415,16 +416,13 @@ class ControlLDM(LatentDiffusion):
 
             guided_view_linear = None
             hint_clip_embedding_ctrl, hint_clip_embedding_diff = self.get_clip_embedding(control)
-            # print('hint_clip_embedding_ctrl shape:', hint_clip_embedding_ctrl.shape)
-            # print('hint_clip_embedding_diff shape:', hint_clip_embedding_diff.shape)
 
         if self.use_linear_view_cond is True:
             guided_view_linear = self.get_view_linear(view_linear, hint_clip_embedding_diff)
-            # print('guided_view_linear:', guided_view_linear.shape)
 
         return x, dict(
             c_crossattn_ctrl=[guided_view_linear],
-            c_crossattn_diff=[hint_clip_embedding_diff],
+            c_crossattn_diff=[c],
             c_concat=[control],
             uc_view=self.get_unconditional_view_linear(view_linear, hint_clip_embedding_diff)
         )
@@ -578,7 +576,8 @@ class ControlLDM(LatentDiffusion):
             params += list(self.model.diffusion_model.output_blocks.parameters())
             params += list(self.model.diffusion_model.out.parameters())
         opt = torch.optim.AdamW(params, lr=lr)
-        return opt
+        sched = MultiStepLR(optimizer=opt, milestones=[3000], gamma=0.1)
+        return [opt], [sched]
 
     def low_vram_shift(self, is_diffusing):
         if is_diffusing:
