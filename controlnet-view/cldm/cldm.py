@@ -358,10 +358,18 @@ class ControlLDM(LatentDiffusion):
                 N_freqs=7
             )
 
+
+            linear_input_view_block_l0 = nn.Linear(linear_view_dim * 15, self.control_model.context_dim * 4)
+            nn.init.eye_(list(linear_input_view_block_l0.parameters())[0])
+            nn.init.zeros_(list(linear_input_view_block_l0.parameters())[1])
+            # linear_input_view_block_l0.reset_parameters()
+            # linear_input_view_block_a0 = nn.SiLU()
+            # linear_input_view_block_l1 = nn.Linear(self.control_model.context_dim * 4, self.control_model.context_dim * 4)
+            # linear_input_view_block_l1.reset_parameters()
             self.linear_input_view_blocks = nn.Sequential(
-                linear(linear_view_dim * 15, self.control_model.context_dim * 4),
-                nn.SiLU(),
-                linear(self.control_model.context_dim * 4, self.control_model.context_dim * 4),
+                linear_input_view_block_l0,
+                # linear_input_view_block_a0,
+                # linear_input_view_block_l1
             )
 
     def get_clip_embedding(self, control):
@@ -379,21 +387,20 @@ class ControlLDM(LatentDiffusion):
         return hint_clip_embedding_ctrl, hint_clip_embedding_diff
 
     def get_view_linear(self, view_linear, hint_clip_embedding_diff):
-        # guided_view_linear \
-        #     = self.linear_view_encoding(view_linear).view(-1, self.linear_view_channels, self.linear_view_dim).permute(0, 2, 1)
-        # print(guided_view_linear.shape)
-
-        # guided_view_linear = self.linear_input_view_blocks[0](guided_view_linear)
-        # for i_layer in range(1, 2, 1):
-        #     guided_view_linear = self.linear_input_view_blocks[i_layer](guided_view_linear, hint_clip_embedding_diff)
-        # guided_view_linear = self.linear_input_view_blocks[-1](guided_view_linear)
         view_linear_enc = self.linear_input_enc(view_linear)
         guided_view_linear = self.linear_input_view_blocks(view_linear_enc)
-        # print('guided_view_linear shape:', guided_view_linear.shape)
-        # guided_view_linear = guided_view_linear.unsqueeze(dim=1)
+
+        '''
+        for name, parms in self.linear_input_view_blocks.named_parameters():
+            print('-->name:', name)
+            print('-->para:', parms)
+            print('-->grad_requirs:', parms.requires_grad)
+            print('-->grad_value:', parms.grad)
+            print("===")
+        '''
+
         guided_view_linear = guided_view_linear.view(-1, 4, self.control_model.context_dim)
-        # print('unsqueezed guided_view_linear shape:', guided_view_linear.shape)
-        guided_view_linear = torch.nn.functional.normalize(guided_view_linear, p=2, dim=-1)
+        # guided_view_linear = torch.nn.functional.normalize(guided_view_linear, p=2, dim=-1)
         return guided_view_linear
 
     # @torch.no_grad()
@@ -571,12 +578,18 @@ class ControlLDM(LatentDiffusion):
 
     def configure_optimizers(self):
         lr = self.learning_rate
-        params = list(self.control_model.parameters())
+        params, params_view = list(self.control_model.parameters()), list(self.linear_input_view_blocks.parameters())
         if not self.sd_locked:
             params += list(self.model.diffusion_model.output_blocks.parameters())
             params += list(self.model.diffusion_model.out.parameters())
-        opt = torch.optim.AdamW(params, lr=lr)
-        sched = MultiStepLR(optimizer=opt, milestones=[3000], gamma=0.1)
+        opt = torch.optim.AdamW(
+            [
+                {"params": params, "lr": lr},
+                {"params": params_view, "lr": lr * 10.0}
+            ]
+        )
+        # opt_view = torch.optim.AdamW(params, lr=lr * 1000.0)
+        sched = MultiStepLR(optimizer=opt, milestones=[1000], gamma=0.1)
         return [opt], [sched]
 
     def low_vram_shift(self, is_diffusing):

@@ -12,8 +12,6 @@ from dataset_view import MyDataset
 from cldm.logger import ImageLogger
 from cldm.model import create_model, load_state_dict
 
-shutil.rmtree('image_log/train')
-
 parser = argparse.ArgumentParser(description='train_view')
 parser.add_argument('--resume_path', default='./models/control_sd21_view_ini.ckpt', type=str, help='init parameter')
 parser.add_argument('--bs', default=4, type=int, help='batch size')
@@ -36,7 +34,6 @@ checkpoint_callback = ModelCheckpoint(
     every_n_train_steps=1000,
 )
 
-
 # First use cpu to load models. Pytorch Lightning will automatically move it to GPUs.
 model = create_model('./models/cldm_v21_view.yaml').cpu()
 model.load_state_dict(load_state_dict(resume_path, location='cpu'))
@@ -50,7 +47,7 @@ dataset = MyDataset(
     path="../../../yxd/dataset/co3d",
     split="train",
     resolution=512,
-    pairs=16 * 4 * 1,
+    pairs=6 * 4 * 1,
     full_dataset=False,
     transform="center_crop",
     kind="car",
@@ -58,7 +55,7 @@ dataset = MyDataset(
 )
 dataloader = DataLoader(dataset, num_workers=4, batch_size=batch_size, shuffle=True)
 logger = ImageLogger(batch_frequency=logger_freq, split=args.split)
-trainer = pl.Trainer(gpus=1, precision=32, accumulate_grad_batches=16, callbacks=[logger, checkpoint_callback], max_epochs=10000)
+trainer = pl.Trainer(gpus=1, precision=32, accumulate_grad_batches=6, callbacks=[logger, checkpoint_callback], max_epochs=10000)
 
 
 # Train!

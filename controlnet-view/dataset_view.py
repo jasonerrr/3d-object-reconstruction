@@ -166,7 +166,7 @@ class MyDataset(Dataset):
         # print('view_linear:', relative)
         return dict(
             jpg=img1.permute(1, 2, 0),
-            txt="A high resolution image of a real blue car",
+            txt="An image, Professional high-quality, wide-angle digital art, photorealistic, natural lighting, extremely high detail, cinematic lighting, realistic rendering of Unreal Engine 5, 8k, 4k, HQ, wallpaper",
             hint=img2.permute(1, 2, 0),
             view_linear=relative
         )
