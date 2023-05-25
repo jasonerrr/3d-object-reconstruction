@@ -43,8 +43,11 @@ class FreqEncoder_torch(nn.Module):
 
         return out
 
-'''
-xxx = torch.tensor([[1.0, 3.0, 5.0], [2.0, 4.0, 6.0]])
-xxxe = FreqEncoder_torch(3, 6, 7)(xxx)
-print(xxxe.view(2, -1, 3).permute(0, 2, 1), xxxe.view(2, -1, 3).permute(0, 2, 1).shape)
-'''
+
+if __name__ == '__main__':
+    xxx = torch.tensor([[1.0, 3.0, 5.0], [2.0, 4.0, 6.0]])
+    xxxe = FreqEncoder_torch(3, 6, 7)(xxx)
+    print(xxxe)
+    print(xxxe.shape)
+    print(xxxe.view(2, -1, 3).permute(0, 2, 1), xxxe.view(2, -1, 3).permute(0, 2, 1).shape)
+

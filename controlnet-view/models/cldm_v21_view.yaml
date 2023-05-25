@@ -22,7 +22,7 @@ model:
     only_mid_control: False
 
     use_linear_view_cond: True
-    linear_view_dim: 4
+    linear_view_dim: 3
     linear_n_freq: 6
 
     control_stage_config:
