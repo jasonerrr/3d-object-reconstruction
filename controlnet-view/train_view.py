@@ -14,7 +14,7 @@ from cldm.model import create_model, load_state_dict
 
 parser = argparse.ArgumentParser(description='train_view')
 parser.add_argument('--resume_path', default='./models/control_sd21_view_ini.ckpt', type=str, help='init parameter')
-parser.add_argument('--bs', default=4, type=int, help='batch size')
+parser.add_argument('--bs', default=6, type=int, help='batch size')
 parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
 parser.add_argument('--checkdir', default='model_checkpoint_7', type=str, help='checkpoint save dir')
 parser.add_argument('--split', default='train', type=str, help='train sample save dir')
@@ -47,7 +47,7 @@ dataset = MyDataset(
     path="../../../yxd/dataset/co3d",
     split="train",
     resolution=512,
-    pairs=6 * 4 * 1,
+    pairs=6 * 12 * 1,
     full_dataset=False,
     transform="center_crop",
     kind="car",

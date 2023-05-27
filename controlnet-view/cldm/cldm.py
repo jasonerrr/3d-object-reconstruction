@@ -297,6 +297,9 @@ class ControlNet(nn.Module):
         # print(hint)
         t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
         emb = self.time_embed(t_emb)
+        if kwargs['view_emb'] is not None:
+            # print('in ControlNet, view_emb =', kwargs['view_emb'])
+            emb = emb + kwargs['view_emb']
 
         guided_hint = self.input_hint_block(hint, emb, context)
 
@@ -319,89 +322,89 @@ class ControlNet(nn.Module):
 class ControlLDM(LatentDiffusion):
 
     def __init__(
-            self, control_stage_config, control_key, view_keys, only_mid_control,
-            use_linear_view_cond=True, linear_view_dim=None, linear_n_freq=None,
+            self, control_stage_config, control_key, view_key, only_mid_control,
+            use_view_cond=True, view_dim=None, n_freq=None,
             *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.control_model = instantiate_from_config(control_stage_config)
         self.control_key = control_key
-        self.view_keys = view_keys
+        self.view_key = view_key
         self.only_mid_control = only_mid_control
         self.control_scales = [1.0] * 13
 
 
-        self.clip_hint = FrozenOpenCLIPImg(device='cpu')
-        if self.control_model.context_dim != 1024:
-            print('need to align the clip img dimension with the context dimension of ctrl net')
-            self.clip_hint_end = nn.Sequential(
-                linear(1024, self.control_model.context_dim)
-            )
-        else:
-            self.clip_hint_end = None
+        # self.clip_hint = FrozenOpenCLIPImg(device='cpu')
+        # if self.control_model.context_dim != 1024:
+        #     print('need to align the clip img dimension with the context dimension of ctrl net')
+        #     self.clip_hint_end = nn.Sequential(
+        #         linear(1024, self.control_model.context_dim)
+        #     )
+        # else:
+        #     self.clip_hint_end = None
 
         '''
             view encoding modules
         '''
-        assert type(use_linear_view_cond) == bool
-        self.use_linear_view_cond = use_linear_view_cond
+        assert type(use_view_cond) == bool
+        self.use_view_cond = use_view_cond
 
-        if use_linear_view_cond is True:
-            assert linear_view_dim is not None
-            assert linear_n_freq is not None
+        if use_view_cond is True:
+            assert view_dim is not None
+            assert n_freq is not None
 
-            self.linear_view_dim = linear_view_dim
+            self.view_dim = view_dim
 
-            self.linear_input_enc = FreqEncoder_torch(
-                input_dim=linear_view_dim,
+            self.view_enc = FreqEncoder_torch(
+                input_dim=view_dim,
                 max_freq_log2=6,
                 N_freqs=7
             )
 
+            view_l0 = nn.Linear(view_dim * 15, self.control_model.model_channels)
+            nn.init.eye_(list(view_l0.parameters())[0])
+            nn.init.zeros_(list(view_l0.parameters())[1])
 
-            linear_input_view_block_l0 = nn.Linear(linear_view_dim * 15, self.control_model.context_dim * 4)
-            nn.init.eye_(list(linear_input_view_block_l0.parameters())[0])
-            nn.init.zeros_(list(linear_input_view_block_l0.parameters())[1])
-            # linear_input_view_block_l0.reset_parameters()
-            # linear_input_view_block_a0 = nn.SiLU()
-            # linear_input_view_block_l1 = nn.Linear(self.control_model.context_dim * 4, self.control_model.context_dim * 4)
-            # linear_input_view_block_l1.reset_parameters()
-            self.linear_input_view_blocks = nn.Sequential(
-                linear_input_view_block_l0,
-                # linear_input_view_block_a0,
-                # linear_input_view_block_l1
+            view_l1 = nn.Linear(self.control_model.model_channels, self.control_model.model_channels * 4)
+            nn.init.eye_(list(view_l1.parameters())[0])
+            nn.init.zeros_(list(view_l1.parameters())[1])
+
+            view_l2 = nn.Linear(self.control_model.model_channels * 4, self.control_model.model_channels * 4)
+            nn.init.eye_(list(view_l2.parameters())[0])
+            nn.init.zeros_(list(view_l2.parameters())[1])
+
+            self.view_embed = nn.Sequential(
+                view_l0, nn.SiLU(),
+                view_l1, nn.SiLU(),
+                view_l2
             )
 
-    def get_clip_embedding(self, control):
-        with torch.no_grad():
-            assert self.clip_hint is not None
-            hint_clip_embedding_ctrl = self.clip_hint.encode(control)
-            hint_clip_embedding_diff = self.clip_hint.encode_five(control)
+    # def get_clip_embedding(self, control):
+    #     with torch.no_grad():
+    #         assert self.clip_hint is not None
+    #         hint_clip_embedding_ctrl = self.clip_hint.encode(control)
+    #         hint_clip_embedding_diff = self.clip_hint.encode_five(control)
+    #
+    #     if self.clip_hint_end is not None:
+    #         hint_clip_embedding_ctrl = self.clip_hint_end(hint_clip_embedding_ctrl)
+    #         hint_clip_embedding_diff = self.clip_hint_end(hint_clip_embedding_diff)
+    #
+    #     hint_clip_embedding_ctrl = hint_clip_embedding_ctrl.unsqueeze(dim=1)
+    #
+    #     return hint_clip_embedding_ctrl, hint_clip_embedding_diff
 
-        if self.clip_hint_end is not None:
-            hint_clip_embedding_ctrl = self.clip_hint_end(hint_clip_embedding_ctrl)
-            hint_clip_embedding_diff = self.clip_hint_end(hint_clip_embedding_diff)
-
-        hint_clip_embedding_ctrl = hint_clip_embedding_ctrl.unsqueeze(dim=1)
-
-        return hint_clip_embedding_ctrl, hint_clip_embedding_diff
-
-    def get_view_linear(self, view_linear, hint_clip_embedding_diff):
-        view_linear_enc = self.linear_input_enc(view_linear)
-        guided_view_linear = self.linear_input_view_blocks(view_linear_enc)
-
-        '''
-        for name, parms in self.linear_input_view_blocks.named_parameters():
-            print('-->name:', name)
-            print('-->para:', parms)
-            print('-->grad_requirs:', parms.requires_grad)
-            print('-->grad_value:', parms.grad)
-            print("===")
-        '''
-
-        guided_view_linear = guided_view_linear.view(-1, 4, self.control_model.context_dim)
+    def get_view_emb(self, view_linear):
+        view_emb = self.view_enc(view_linear)
+        view_emb = self.view_embed(view_emb)
+        # for name, parms in self.linear_input_view_blocks.named_parameters():
+        #     print('-->name:', name)
+        #     print('-->para:', parms)
+        #     print('-->grad_requirs:', parms.requires_grad)
+        #     print('-->grad_value:', parms.grad)
+        #     print("===")
+        # view_linear = guided_view_linear.view(-1, 4, self.control_model.context_dim)
         # guided_view_linear = torch.nn.functional.normalize(guided_view_linear, p=2, dim=-1)
-        return guided_view_linear
+        return view_emb
 
     # @torch.no_grad()
     def get_input(self, batch, k, bs=None, *args, **kwargs):
@@ -409,29 +412,33 @@ class ControlLDM(LatentDiffusion):
             x, c = super().get_input(batch, self.first_stage_key, *args, **kwargs)
             # print('c_crossattn original shape:', c.shape)
             control = batch[self.control_key]
-            view_linear = batch[self.view_keys['view_linear']]
+            view = batch[self.view_key]
             if bs is not None:
                 control = control[:bs]
-                view_linear = view_linear[:bs]
+                view = view[:bs]
             control = control.to(self.device)
-            view_linear = view_linear.to(self.device)
+            view = view.to(self.device)
 
             control = einops.rearrange(control, 'b h w c -> b c h w')
 
             control = control.to(memory_format=torch.contiguous_format).float()
-            view_linear = view_linear.to(memory_format=torch.contiguous_format).float()
+            view = view.to(memory_format=torch.contiguous_format).float()
 
-            guided_view_linear = None
-            hint_clip_embedding_ctrl, hint_clip_embedding_diff = self.get_clip_embedding(control)
+            # guided_view_linear = None
+            # hint_clip_embedding_ctrl, hint_clip_embedding_diff = self.get_clip_embedding(control)
 
-        if self.use_linear_view_cond is True:
-            guided_view_linear = self.get_view_linear(view_linear, hint_clip_embedding_diff)
+        if self.use_view_cond is True:
+            view_emb = self.get_view_emb(view)
+        else:
+            view_emb = None
 
         return x, dict(
-            c_crossattn_ctrl=[guided_view_linear],
+            c_crossattn_ctrl=[c],
             c_crossattn_diff=[c],
             c_concat=[control],
-            uc_view=self.get_unconditional_view_linear(view_linear, hint_clip_embedding_diff)
+            view_emb=view_emb,
+            view_emb_uc=self.get_unconditional_view_emb(view)
+            # uc_view=self.get_unconditional_view_linear(view_linear)
         )
 
     def apply_model(self, x_noisy, t, cond, *args, **kwargs):
@@ -441,6 +448,8 @@ class ControlLDM(LatentDiffusion):
         cond_ctrl = torch.cat(cond['c_crossattn_ctrl'], 1)
         cond_diff = torch.cat(cond['c_crossattn_diff'], 1)
         # print(f'cond is: {cond}, t is: {t}')
+        view_emb = cond['view_emb']
+        # print('in ControlLDM, view_emb =', view_emb)
 
         if cond['c_concat'] is None:
             eps = diffusion_model(
@@ -455,7 +464,8 @@ class ControlLDM(LatentDiffusion):
                 x=x_noisy,
                 hint=torch.cat(cond['c_concat'], 1),
                 timesteps=t,
-                context=cond_ctrl
+                context=cond_ctrl,
+                view_emb=view_emb
             )
             control = [c * scale for c, scale in zip(control, self.control_scales)]
             eps = diffusion_model(
@@ -473,8 +483,8 @@ class ControlLDM(LatentDiffusion):
         return self.get_learned_conditioning([""] * N)
 
     @torch.no_grad()
-    def get_unconditional_view_linear(self, view_linear, hint_clip_embedding_diff):
-        return self.get_view_linear(torch.zeros_like(view_linear), hint_clip_embedding_diff)
+    def get_unconditional_view_emb(self, view_emb):
+        return self.get_view_emb(torch.zeros_like(view_emb))
 
     @torch.no_grad()
     def log_images(self, batch, N=4, n_row=2, sample=False, ddim_steps=50, ddim_eta=0.0, return_keys=None,
@@ -488,22 +498,24 @@ class ControlLDM(LatentDiffusion):
         z, c = self.get_input(batch, self.first_stage_key, bs=N)
         c_cat = c["c_concat"][0][:N]
         # hint_clip_embedding_ctrl, guided_view_linear = c["c_crossattn_ctrl"][0][:N], c["c_crossattn_ctrl"][1][:N]
-        guided_view_linear = c["c_crossattn_ctrl"][0][:N]
-        hint_clip_embedding_diff = c["c_crossattn_diff"][0][:N]
-        uc_view = c["uc_view"]
+        c_crossattn_ctrl = c["c_crossattn_ctrl"][0][:N]
+        c_crossattn_diff = c["c_crossattn_diff"][0][:N]
+        view_emb = c["view_emb"]
+        # uc_view = c["uc_view"]
+        view_emb_uc = c["view_emb_uc"]
+
         N = min(z.shape[0], N)
         n_row = min(z.shape[0], n_row)
 
-        x_T_posterior = self.encode_first_stage(c["c_concat"][0][:N])
-        x_T = self.get_first_stage_encoding(x_T_posterior)
-        noise_T = torch.randn_like(x_T)
-        alpha_T = 0.999 * 0.999
-        x_T = math.sqrt(alpha_T) * noise_T + math.sqrt(1.0 - alpha_T) * x_T
+        # x_T_posterior = self.encode_first_stage(c["c_concat"][0][:N])
+        # x_T = self.get_first_stage_encoding(x_T_posterior)
+        # noise_T = torch.randn_like(x_T)
+        # alpha_T = 0.999 * 0.999
+        # x_T = math.sqrt(alpha_T) * noise_T + math.sqrt(1.0 - alpha_T) * x_T
 
         log["target_view"] = (batch["jpg"].float()).permute(0, 3, 1, 2)
-        log["hint_view"] = (batch["hint"].float()).permute(0, 3, 1, 2)
-
-        log["reconstruction"] = self.decode_first_stage(z)
+        # log["hint_view"] = (batch["hint"].float()).permute(0, 3, 1, 2)
+        # log["reconstruction"] = self.decode_first_stage(z)
         log["control"] = c_cat * 2.0 - 1.0
         log["conditioning"] = log_txt_as_img((512, 512), batch[self.cond_stage_key], size=16)
 
@@ -530,8 +542,9 @@ class ControlLDM(LatentDiffusion):
             samples, z_denoise_row = self.sample_log(
                 cond={
                     "c_concat": [c_cat],
-                    "c_crossattn_ctrl": [guided_view_linear],
-                    "c_crossattn_diff": [hint_clip_embedding_diff]
+                    "c_crossattn_ctrl": [c_crossattn_ctrl],
+                    "c_crossattn_diff": [c_crossattn_diff],
+                    "view_emb": view_emb
                 },
                 batch_size=N,
                 ddim=use_ddim,
@@ -545,20 +558,22 @@ class ControlLDM(LatentDiffusion):
                 log["denoise_row"] = denoise_grid
 
         if unconditional_guidance_scale > 1.0:
-            # uc_cross = self.get_unconditional_conditioning(N)
+            uc_cross = self.get_unconditional_conditioning(N)
             uc_full = {
                 "c_concat": [c_cat],
-                "c_crossattn_ctrl": [uc_view],
-                "c_crossattn_diff": [hint_clip_embedding_diff]
+                "c_crossattn_ctrl": [c_crossattn_ctrl],
+                "c_crossattn_diff": [c_crossattn_diff],
+                "view_emb": view_emb_uc
             }
             samples_cfg, _ = self.sample_log(
                 cond={
                     "c_concat": [c_cat],
-                    "c_crossattn_ctrl": [guided_view_linear],
-                    "c_crossattn_diff": [hint_clip_embedding_diff]
+                    "c_crossattn_ctrl": [c_crossattn_ctrl],
+                    "c_crossattn_diff": [c_crossattn_diff],
+                    "view_emb": view_emb
                 },
                 batch_size=N, ddim=use_ddim,
-                ddim_steps=ddim_steps, x_T=x_T if use_x_T else None,
+                ddim_steps=ddim_steps, x_T=None,
                 eta=ddim_eta,
                 unconditional_guidance_scale=unconditional_guidance_scale,
                 unconditional_conditioning=uc_full
@@ -578,7 +593,7 @@ class ControlLDM(LatentDiffusion):
 
     def configure_optimizers(self):
         lr = self.learning_rate
-        params, params_view = list(self.control_model.parameters()), list(self.linear_input_view_blocks.parameters())
+        params, params_view = list(self.control_model.parameters()), list(self.view_embed.parameters())
         if not self.sd_locked:
             params += list(self.model.diffusion_model.output_blocks.parameters())
             params += list(self.model.diffusion_model.out.parameters())

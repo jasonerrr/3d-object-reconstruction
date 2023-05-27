@@ -19,7 +19,7 @@ import albumentations as A
 import sys
 from plyfile import PlyData
 import pandas as pd
-from blip.demo import blip_run
+# from blip.demo import blip_run
 # from models.blip import blip_decoder
 class MyDataset(Dataset):
     # split in ["train","val","test"]
@@ -73,24 +73,24 @@ class MyDataset(Dataset):
                     R = torch.Tensor(frame["viewpoint"]["R"])
                     T = torch.Tensor(frame["viewpoint"]["T"])
                     self.img_camera[img_path] = [R, T]
-        if (self.full_dataset == False and os.path.exists("text.txt") == False):
-            self.save_text("text.txt")
-        if (self.full_dataset == True and os.path.exists("full_text.txt") == False):
-            self.save_text("full_text.txt")
+        # if (self.full_dataset == False and os.path.exists("text.txt") == False):
+        #     self.save_text("text.txt")
+        # if (self.full_dataset == True and os.path.exists("full_text.txt") == False):
+        #     self.save_text("full_text.txt")
         # print(self.sequence)
-        if (self.full_dataset == False):
-            f = open("text.txt")
-        else:
-            f = open("full_text.txt")
-        while (1):
-            dir = f.readline()
-            text = f.readline()
-            if (len(dir) == 0):
-                break
-            dir = self.path + '/' + dir
-            if (dir.replace('\n', '') in self.sequence_imgs):
-                self.sequence_imgs[dir.replace('\n', '')].append(text.replace('\n', ''))
-        f.close()
+        # if (self.full_dataset == False):
+        #     f = open("text.txt")
+        # else:
+        #     f = open("full_text.txt")
+        # while (1):
+        #     dir = f.readline()
+        #     text = f.readline()
+        #     if (len(dir) == 0):
+        #         break
+        #     dir = self.path + '/' + dir
+        #     if (dir.replace('\n', '') in self.sequence_imgs):
+        #         self.sequence_imgs[dir.replace('\n', '')].append(text.replace('\n', ''))
+        # f.close()
 
     def __getitem__(self, index):
         sequence_index = index // self.pairs
@@ -108,7 +108,7 @@ class MyDataset(Dataset):
         pose2 = self.img_camera[img2_path]
         origin = self.sequence_imgs[self.sequence[sequence_index]][1]
         # print(origin)
-        text = self.sequence_imgs[self.sequence[sequence_index]][2]
+        # text = self.sequence_imgs[self.sequence[sequence_index]][2]
         '''
         print(img1.shape, type(img1))
 
@@ -168,7 +168,7 @@ class MyDataset(Dataset):
             jpg=img1.permute(1, 2, 0),
             txt="An image, Professional high-quality, wide-angle digital art, photorealistic, natural lighting, extremely high detail, cinematic lighting, realistic rendering of Unreal Engine 5, 8k, 4k, HQ, wallpaper",
             hint=img2.permute(1, 2, 0),
-            view_linear=relative
+            view=relative
         )
 
     def __len__(self):
