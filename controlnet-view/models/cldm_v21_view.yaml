@@ -9,8 +9,7 @@ model:
     first_stage_key: "jpg"
     cond_stage_key: "txt"
     control_key: "hint"
-
-    view_keys: {"view_linear": "view_linear"}
+    view_key: "view"
 
     image_size: 64
     channels: 4
@@ -21,9 +20,9 @@ model:
     use_ema: False
     only_mid_control: False
 
-    use_linear_view_cond: True
-    linear_view_dim: 3
-    linear_n_freq: 6
+    use_view_cond: True
+    view_dim: 3
+    n_freq: 6
 
     control_stage_config:
       target: cldm.cldm.ControlNet
